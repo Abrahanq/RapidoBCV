@@ -61,6 +61,8 @@ class _ConversorPageState extends State<ConversorPage> {
   static const String _ratesCacheKey = 'exchange_rates_cache';
   bool _isUpdatingText = false;
 
+  List<ExchangeRates> rateOptions = [];
+  int selectedRateIndex = 0;
   ExchangeRates? rates;
   bool isLoading = true;
   String? error;
@@ -86,7 +88,7 @@ class _ConversorPageState extends State<ConversorPage> {
     return null;
   }
 
-  Future<ExchangeRates> obtenerPrecios() async {
+  Future<List<ExchangeRates>> obtenerPrecios() async {
     final uri = Uri.parse(
       'https://abrahanq.github.io/bcv-price/prices.json',
     ).replace(
@@ -106,39 +108,83 @@ class _ConversorPageState extends State<ConversorPage> {
     final Map<String, dynamic> data =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
-    Map<String, dynamic> precioData = data;
-    if (data['precios'] is List && (data['precios'] as List).isNotEmpty) {
-      precioData = ((data['precios'] as List).first as Map).cast<String, dynamic>();
-    }
-
-    final usd = _toDoubleOrNull(precioData['usd']);
-    final eur = _toDoubleOrNull(precioData['eur']);
-
-    if (usd == null || eur == null) {
-      throw const FormatException('Faltan claves usd/eur en la respuesta');
-    }
-
-    final dateRaw = precioData['date'] ?? precioData['fecha'];
-    DateTime parsedDate;
-    try {
-      parsedDate = DateTime.parse(dateRaw as String);
-    } catch (_) {
-      parsedDate = DateTime.now();
-    }
-
     double usdtPromedioBinance;
     try {
       usdtPromedioBinance = await _obtenerPromedioUsdtBinance();
     } catch (_) {
-      usdtPromedioBinance = usd;
+      usdtPromedioBinance = 0;
     }
 
-    return ExchangeRates(
-      usdToVes: usd,
-      eurToVes: eur,
-      usdtToVes: usdtPromedioBinance,
-      lastUpdate: parsedDate,
-    );
+    final List<ExchangeRates> parsedRates = [];
+    final precios = data['precios'];
+
+    if (precios is List && precios.isNotEmpty) {
+      for (final item in precios) {
+        if (item is! Map) continue;
+        final precioData = item.cast<String, dynamic>();
+        final usd = _toDoubleOrNull(precioData['usd']);
+        final eur = _toDoubleOrNull(precioData['eur']);
+        if (usd == null || eur == null) continue;
+
+        final dateRaw = precioData['date'] ?? precioData['fecha'];
+        DateTime parsedDate;
+        try {
+          parsedDate = DateTime.parse(dateRaw as String);
+        } catch (_) {
+          parsedDate = DateTime.now();
+        }
+
+        final usdtFromJson = _toDoubleOrNull(precioData['usdt']);
+        parsedRates.add(
+          ExchangeRates(
+            usdToVes: usd,
+            eurToVes: eur,
+            usdtToVes: usdtFromJson ?? (usdtPromedioBinance == 0 ? usd : usdtPromedioBinance),
+            lastUpdate: parsedDate,
+          ),
+        );
+      }
+    } else {
+      final usd = _toDoubleOrNull(data['usd']);
+      final eur = _toDoubleOrNull(data['eur']);
+      if (usd != null && eur != null) {
+        final dateRaw = data['date'] ?? data['fecha'];
+        DateTime parsedDate;
+        try {
+          parsedDate = DateTime.parse(dateRaw as String);
+        } catch (_) {
+          parsedDate = DateTime.now();
+        }
+
+        final usdtFromJson = _toDoubleOrNull(data['usdt']);
+        parsedRates.add(
+          ExchangeRates(
+            usdToVes: usd,
+            eurToVes: eur,
+            usdtToVes: usdtFromJson ?? (usdtPromedioBinance == 0 ? usd : usdtPromedioBinance),
+            lastUpdate: parsedDate,
+          ),
+        );
+      }
+    }
+
+    if (parsedRates.isEmpty) {
+      throw const FormatException('No se encontraron tasas válidas en la respuesta');
+    }
+
+    parsedRates.sort((a, b) => a.lastUpdate.compareTo(b.lastUpdate));
+    return parsedRates;
+  }
+
+  int _obtenerIndiceInicial(List<ExchangeRates> options) {
+    final now = DateTime.now();
+    int index = 0;
+    for (int i = 0; i < options.length; i++) {
+      if (!options[i].lastUpdate.isAfter(now)) {
+        index = i;
+      }
+    }
+    return index;
   }
 
   Future<double> _obtenerPrecioUsdtBinancePorTipo(String tradeType) async {
@@ -269,6 +315,8 @@ class _ConversorPageState extends State<ConversorPage> {
             usdtToVes: 0.22,
             lastUpdate: DateTime.now(),
           );
+      rateOptions = [rates!];
+      selectedRateIndex = 0;
     });
   }
 
@@ -280,12 +328,16 @@ class _ConversorPageState extends State<ConversorPage> {
       });
 
       final fetchedRates = await obtenerPrecios();
-      await _guardarTasasEnCache(fetchedRates);
+      final initialIndex = _obtenerIndiceInicial(fetchedRates);
+      final selectedRates = fetchedRates[initialIndex];
+      await _guardarTasasEnCache(selectedRates);
 
       if (!mounted) return;
 
       setState(() {
-        rates = fetchedRates;
+        rateOptions = fetchedRates;
+        selectedRateIndex = initialIndex;
+        rates = selectedRates;
         isLoading = false;
       });
     } on TimeoutException {
@@ -378,6 +430,16 @@ class _ConversorPageState extends State<ConversorPage> {
     _recalcularConversionActual();
   }
 
+  void _seleccionarRegistroTasa(int index) {
+    if (index < 0 || index >= rateOptions.length) return;
+
+    setState(() {
+      selectedRateIndex = index;
+      rates = rateOptions[index];
+    });
+    _recalcularConversionActual();
+  }
+
   void limpiarMontos() {
     setState(() {
       _fromController.clear();
@@ -417,11 +479,35 @@ class _ConversorPageState extends State<ConversorPage> {
     return '$day/$month/$year $hour:$minute';
   }
 
+  String _formatearFechaCorta(DateTime dateTime) {
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    return '$day/$month';
+  }
+
+  String _labelRegistro(int index) {
+    if (index < 0 || index >= rateOptions.length) return 'Sin fecha';
+
+    if (rateOptions.length == 2) {
+      final base = index == 0 ? 'Día pasado' : 'Día siguiente';
+      return '$base (${_formatearFechaCorta(rateOptions[index].lastUpdate)})';
+    }
+
+    return _formatearFechaCorta(rateOptions[index].lastUpdate);
+  }
+
+  Icon _iconoMoneda(String currency) {
+    if (currency == 'EUR') return const Icon(Icons.euro);
+    if (currency == 'USDT') return const Icon(Icons.currency_exchange);
+    return const Icon(Icons.attach_money);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('RapidoBCV - Conversor'),
+        title: const Text('RápidoBCV'),
+        centerTitle: true,
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -498,6 +584,24 @@ class _ConversorPageState extends State<ConversorPage> {
                               color: Colors.grey[600],
                             ),
                           ),
+                          if (rateOptions.length > 1) ...[
+                            const SizedBox(height: 12),
+                            SegmentedButton<int>(
+                              segments: List<ButtonSegment<int>>.generate(
+                                rateOptions.length,
+                                (index) => ButtonSegment<int>(
+                                  value: index,
+                                  label: Text(_labelRegistro(index)),
+                                ),
+                              ),
+                              selected: <int>{selectedRateIndex},
+                              onSelectionChanged: (Set<int> selection) {
+                                if (selection.isNotEmpty) {
+                                  _seleccionarRegistroTasa(selection.first);
+                                }
+                              },
+                            ),
+                          ],
                         ],
                       ),
                   ],
@@ -506,14 +610,14 @@ class _ConversorPageState extends State<ConversorPage> {
             ),
             const SizedBox(height: 30),
 
-            // Conversor
-            const Text(
-              'Convertidor',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            // // Conversor
+            // const Text(
+            //   'Convertidor',
+            //   style: TextStyle(
+            //     fontSize: 20,
+            //     fontWeight: FontWeight.bold,
+            //   ),
+            // ),
             const SizedBox(height: 20),
 
             // Campo de entrada
@@ -529,7 +633,7 @@ class _ConversorPageState extends State<ConversorPage> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      prefixIcon: const Icon(Icons.attach_money),
+                      prefixIcon: _iconoMoneda(fromCurrency),
                       suffixText: fromCurrency,
                       suffixIcon: IconButton(
                         onPressed: limpiarMontos,
@@ -564,7 +668,7 @@ class _ConversorPageState extends State<ConversorPage> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      prefixIcon: const Icon(Icons.attach_money),
+                      prefixIcon: const Icon(Icons.payments),
                       suffixText: 'VES',
                       suffixIcon: IconButton(
                         onPressed: limpiarMontos,
