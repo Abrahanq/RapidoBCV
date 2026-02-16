@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import 'dart:convert';
 
 void main() {
@@ -14,9 +17,19 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'RapidoBCV - Conversor de Divisas',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        brightness: Brightness.light,
         useMaterial3: true,
       ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.dark,
+        ),
+        brightness: Brightness.dark,
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.dark,
       home: const ConversorPage(),
     );
   }
@@ -26,11 +39,13 @@ class MyApp extends StatelessWidget {
 class ExchangeRates {
   final double usdToVes;
   final double eurToVes;
+  final double usdtToVes;
   final DateTime lastUpdate;
 
   ExchangeRates({
     required this.usdToVes,
     required this.eurToVes,
+    required this.usdtToVes,
     required this.lastUpdate,
   });
 }
@@ -43,6 +58,9 @@ class ConversorPage extends StatefulWidget {
 }
 
 class _ConversorPageState extends State<ConversorPage> {
+  static const String _ratesCacheKey = 'exchange_rates_cache';
+  bool _isUpdatingText = false;
+
   ExchangeRates? rates;
   bool isLoading = true;
   String? error;
@@ -52,14 +70,206 @@ class _ConversorPageState extends State<ConversorPage> {
   final TextEditingController _toController = TextEditingController();
   
   String fromCurrency = 'USD';
-  String toCurrency = 'VES';
-  
-  final List<String> currencies = ['USD', 'EUR', 'VES'];
 
   @override
   void initState() {
     super.initState();
     obtenerTasasActuales();
+  }
+
+  double? _toDoubleOrNull(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      return double.tryParse(value.replaceAll(',', '.'));
+    }
+    return null;
+  }
+
+  Future<ExchangeRates> obtenerPrecios() async {
+    final uri = Uri.parse(
+      'https://abrahanq.github.io/bcv-price/prices.json',
+    ).replace(
+      queryParameters: {
+        'v': DateTime.now().millisecondsSinceEpoch.toString(),
+      },
+    );
+
+    final response = await http
+        .get(uri, headers: {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}: no se pudo cargar precios');
+    }
+
+    final Map<String, dynamic> data =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    Map<String, dynamic> precioData = data;
+    if (data['precios'] is List && (data['precios'] as List).isNotEmpty) {
+      precioData = ((data['precios'] as List).first as Map).cast<String, dynamic>();
+    }
+
+    final usd = _toDoubleOrNull(precioData['usd']);
+    final eur = _toDoubleOrNull(precioData['eur']);
+
+    if (usd == null || eur == null) {
+      throw const FormatException('Faltan claves usd/eur en la respuesta');
+    }
+
+    final dateRaw = precioData['date'] ?? precioData['fecha'];
+    DateTime parsedDate;
+    try {
+      parsedDate = DateTime.parse(dateRaw as String);
+    } catch (_) {
+      parsedDate = DateTime.now();
+    }
+
+    double usdtPromedioBinance;
+    try {
+      usdtPromedioBinance = await _obtenerPromedioUsdtBinance();
+    } catch (_) {
+      usdtPromedioBinance = usd;
+    }
+
+    return ExchangeRates(
+      usdToVes: usd,
+      eurToVes: eur,
+      usdtToVes: usdtPromedioBinance,
+      lastUpdate: parsedDate,
+    );
+  }
+
+  Future<double> _obtenerPrecioUsdtBinancePorTipo(String tradeType) async {
+    final uri = Uri.parse(
+      'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search',
+    );
+
+    final response = await http
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({
+            'page': 1,
+            'rows': 1,
+            'payTypes': <String>[],
+            'asset': 'USDT',
+            'tradeType': tradeType,
+            'fiat': 'VES',
+            'publisherType': 'merchant',
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}: fallo consulta Binance P2P');
+    }
+
+    final Map<String, dynamic> body =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final rowsDynamic = body['data'];
+    if (rowsDynamic is! List<dynamic>) {
+      throw const FormatException('Binance P2P sin lista de datos');
+    }
+
+    final List<dynamic> rows = rowsDynamic;
+    if (rows.isEmpty) {
+      throw const FormatException('Binance P2P sin datos para USDT/VES');
+    }
+
+    final Map<String, dynamic> adv =
+        (rows.first as Map<String, dynamic>)['adv'] as Map<String, dynamic>;
+    final priceRaw = adv['price'];
+    if (priceRaw == null) {
+      throw const FormatException('Binance P2P sin precio en la oferta');
+    }
+
+    final price = _toDoubleOrNull(priceRaw);
+    if (price == null) {
+      throw const FormatException('Precio inválido en Binance P2P');
+    }
+
+    return price;
+  }
+
+  Future<double> _obtenerPromedioUsdtBinance() async {
+    final prices = await Future.wait<double>([
+      _obtenerPrecioUsdtBinancePorTipo('BUY'),
+      _obtenerPrecioUsdtBinancePorTipo('SELL'),
+    ]);
+
+    return (prices[0] + prices[1]) / 2;
+  }
+
+  Future<void> _guardarTasasEnCache(ExchangeRates exchangeRates) async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode({
+      'usd': exchangeRates.usdToVes,
+      'eur': exchangeRates.eurToVes,
+      'usdt': exchangeRates.usdtToVes,
+      'date': exchangeRates.lastUpdate.toIso8601String(),
+    });
+    await prefs.setString(_ratesCacheKey, payload);
+  }
+
+  Future<ExchangeRates?> _leerTasasDesdeCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedValue = prefs.getString(_ratesCacheKey);
+
+    if (cachedValue == null || cachedValue.isEmpty) {
+      return null;
+    }
+
+    final Map<String, dynamic> data =
+        jsonDecode(cachedValue) as Map<String, dynamic>;
+
+    final usd = _toDoubleOrNull(data['usd']);
+    final eur = _toDoubleOrNull(data['eur']);
+    final usdt = _toDoubleOrNull(data['usdt']) ?? usd;
+    final dateRaw = data['date'];
+
+    if (usd == null || eur == null || usdt == null || dateRaw is! String) {
+      return null;
+    }
+
+    DateTime parsedDate;
+    try {
+      parsedDate = DateTime.parse(dateRaw);
+    } catch (_) {
+      parsedDate = DateTime.now();
+    }
+
+    return ExchangeRates(
+      usdToVes: usd,
+      eurToVes: eur,
+      usdtToVes: usdt,
+      lastUpdate: parsedDate,
+    );
+  }
+
+  Future<void> _manejarErrorConCache(String message) async {
+    final cachedRates = await _leerTasasDesdeCache();
+
+    if (!mounted) return;
+
+    setState(() {
+      error = cachedRates != null
+          ? '$message Mostrando última tasa guardada.'
+          : '$message No hay datos guardados en caché.';
+      isLoading = false;
+      rates =
+          cachedRates ??
+          ExchangeRates(
+            usdToVes: 0.22,
+            eurToVes: 7.33,
+            usdtToVes: 0.22,
+            lastUpdate: DateTime.now(),
+          );
+    });
   }
 
   Future<void> obtenerTasasActuales() async {
@@ -69,90 +279,142 @@ class _ConversorPageState extends State<ConversorPage> {
         error = null;
       });
 
-      // API para obtener tasas del dólar
-      final usdResponse = await http.get(
-        Uri.parse('https://ve.dolarapi.com/v1/dolares/oficial'),
-      ).timeout(const Duration(seconds: 10));
+      final fetchedRates = await obtenerPrecios();
+      await _guardarTasasEnCache(fetchedRates);
 
-      // API para obtener tasas del euro
-      final eurResponse = await http.get(
-        Uri.parse('https://ve.dolarapi.com/v1/dolares/bcv'),
-      ).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
 
-      if (usdResponse.statusCode == 200 && eurResponse.statusCode == 200) {
-        final usdData = json.decode(usdResponse.body);
-        
-        // Calculamos la tasa del EUR aproximadamente (multiplicamos USD por 1.1)
-        double usdRate = (usdData['promedio'] as num).toDouble();
-        double eurRate = usdRate * 1.1; // Aproximación inicial
-        
-        setState(() {
-          rates = ExchangeRates(
-            usdToVes: usdRate,
-            eurToVes: eurRate,
-            lastUpdate: DateTime.now(),
-          );
-          isLoading = false;
-        });
-      } else {
-        throw Exception('Error al obtener las tasas');
-      }
-    } catch (e) {
       setState(() {
-        error = 'No se pudieron obtener las tasas. Intenta de nuevo.';
+        rates = fetchedRates;
         isLoading = false;
-        // Valores por defecto para que funcione
-        rates = ExchangeRates(
-          usdToVes: 40.0,
-          eurToVes: 44.0,
-          lastUpdate: DateTime.now(),
-        );
       });
+    } on TimeoutException {
+      await _manejarErrorConCache('Tiempo de espera agotado al consultar precios.');
+    } on http.ClientException {
+      await _manejarErrorConCache(
+        'Sin conexión o error de red al consultar precios.',
+      );
+    } on FormatException {
+      await _manejarErrorConCache('Respuesta JSON inválida.');
+    } catch (e) {
+      await _manejarErrorConCache(
+        'No se pudieron obtener las tasas. Intenta de nuevo.',
+      );
     }
   }
 
-  void convertir() {
-    if (_fromController.text.isEmpty || rates == null) return;
-
-    final monto = double.tryParse(_fromController.text);
-    if (monto == null) return;
-
-    double resultado = 0;
-
-    // Conversiones
-    if (fromCurrency == 'USD' && toCurrency == 'VES') {
-      resultado = monto * rates!.usdToVes;
-    } else if (fromCurrency == 'VES' && toCurrency == 'USD') {
-      resultado = monto / rates!.usdToVes;
-    } else if (fromCurrency == 'EUR' && toCurrency == 'VES') {
-      resultado = monto * rates!.eurToVes;
-    } else if (fromCurrency == 'VES' && toCurrency == 'EUR') {
-      resultado = monto / rates!.eurToVes;
-    } else if (fromCurrency == 'USD' && toCurrency == 'EUR') {
-      resultado = (monto * rates!.usdToVes) / rates!.eurToVes;
-    } else if (fromCurrency == 'EUR' && toCurrency == 'USD') {
-      resultado = (monto * rates!.eurToVes) / rates!.usdToVes;
+  double _convertirMonto(double monto, String source, String target) {
+    if (rates == null || source == target) {
+      return monto;
     }
 
-    setState(() {
-      _toController.text = resultado.toStringAsFixed(2);
-    });
+    final sourceRate = _obtenerTasaEnVes(source);
+    final targetRate = _obtenerTasaEnVes(target);
+    return (monto * sourceRate) / targetRate;
   }
 
-  void intercambiarMonedas() {
-    setState(() {
-      final temp = fromCurrency;
-      fromCurrency = toCurrency;
-      toCurrency = temp;
+  double _obtenerTasaEnVes(String currency) {
+    if (currency == 'VES') return 1;
+    if (currency == 'USD') return rates!.usdToVes;
+    if (currency == 'EUR') return rates!.eurToVes;
+    if (currency == 'USDT') return rates!.usdtToVes;
+    return 1;
+  }
 
-      final tempController = _fromController.text;
-      _fromController.text = _toController.text;
-      _toController.text = tempController;
+  void _setControllerText(TextEditingController controller, String value) {
+    _isUpdatingText = true;
+    controller.text = value;
+    controller.selection = TextSelection.collapsed(offset: value.length);
+    _isUpdatingText = false;
+  }
 
-      if (_fromController.text.isNotEmpty) {
-        convertir();
+  void _actualizarCampoDestino({required bool desdeArriba}) {
+    if (_isUpdatingText) return;
+
+    final sourceController = desdeArriba ? _fromController : _toController;
+    final targetController = desdeArriba ? _toController : _fromController;
+
+    if (rates == null) {
+      _setControllerText(targetController, '');
+      return;
+    }
+
+    final input = sourceController.text.trim();
+    if (input.isEmpty) {
+      _setControllerText(targetController, '');
+      return;
+    }
+
+    final normalized = input.replaceAll(',', '.');
+    final monto = double.tryParse(normalized);
+    if (monto == null) {
+      _setControllerText(targetController, '');
+      return;
+    }
+
+    final sourceCurrency = desdeArriba ? fromCurrency : 'VES';
+    final targetCurrency = desdeArriba ? 'VES' : fromCurrency;
+    final resultado = _convertirMonto(monto, sourceCurrency, targetCurrency);
+
+    _setControllerText(targetController, resultado.toStringAsFixed(2));
+  }
+
+  void _recalcularConversionActual() {
+    if (_fromController.text.trim().isNotEmpty) {
+      _actualizarCampoDestino(desdeArriba: true);
+    } else {
+      if (_toController.text.trim().isNotEmpty) {
+        _actualizarCampoDestino(desdeArriba: false);
+      } else {
+        _setControllerText(_toController, '');
       }
+    }
+  }
+
+  void _seleccionarMonedaDesdeTasa(String currency) {
+    setState(() {
+      fromCurrency = currency;
     });
+    _recalcularConversionActual();
+  }
+
+  void limpiarMontos() {
+    setState(() {
+      _fromController.clear();
+      _toController.clear();
+    });
+  }
+
+  Future<void> _copiarMontoAlPortapapeles(
+    TextEditingController controller,
+    String currency,
+  ) async {
+    final monto = controller.text.trim();
+    if (monto.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay monto para copiar.')),
+      );
+      return;
+    }
+
+    final montoParaCopiar = monto.replaceAll('.', ',');
+
+    await Clipboard.setData(ClipboardData(text: montoParaCopiar));
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Monto copiado: $montoParaCopiar $currency')),
+    );
+  }
+
+  String _formatearFechaAdquisicion(DateTime dateTime) {
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final year = dateTime.year.toString();
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year $hour:$minute';
   }
 
   @override
@@ -206,14 +468,31 @@ class _ConversorPageState extends State<ConversorPage> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              _buildRateCard('USD', '${rates!.usdToVes.toStringAsFixed(2)}'),
+                              _buildRateCard(
+                                context,
+                                'USD',
+                                '${rates!.usdToVes.toStringAsFixed(2)}',
+                                () => _seleccionarMonedaDesdeTasa('USD'),
+                              ),
                               const SizedBox(width: 10),
-                              _buildRateCard('EUR', '${rates!.eurToVes.toStringAsFixed(2)}'),
+                              _buildRateCard(
+                                context,
+                                'EUR',
+                                '${rates!.eurToVes.toStringAsFixed(2)}',
+                                () => _seleccionarMonedaDesdeTasa('EUR'),
+                              ),
+                              const SizedBox(width: 10),
+                              _buildRateCard(
+                                context,
+                                'USDT',
+                                '${rates!.usdtToVes.toStringAsFixed(2)}',
+                                () => _seleccionarMonedaDesdeTasa('USDT'),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'Actualizado: ${rates!.lastUpdate.hour}:${rates!.lastUpdate.minute}',
+                            'Fecha de adquisición: ${_formatearFechaAdquisicion(rates!.lastUpdate)}',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -237,91 +516,73 @@ class _ConversorPageState extends State<ConversorPage> {
             ),
             const SizedBox(height: 20),
 
-            // Moneda de origen
-            DropdownButton<String>(
-              value: fromCurrency,
-              isExpanded: true,
-              items: currencies.map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    fromCurrency = newValue;
-                    if (_fromController.text.isNotEmpty) {
-                      convertir();
-                    }
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 15),
-
             // Campo de entrada
-            TextField(
-              controller: _fromController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Monto en $fromCurrency',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _fromController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: '$fromCurrency',
+                      // labelText: 'Dólares',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      prefixIcon: const Icon(Icons.attach_money),
+                      suffixText: fromCurrency,
+                      suffixIcon: IconButton(
+                        onPressed: limpiarMontos,
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Limpiar montos',
+                      ),
+                    ),
+                    onChanged: (_) => _actualizarCampoDestino(desdeArriba: true),
+                  ),
                 ),
-                prefixIcon: const Icon(Icons.attach_money),
-                suffixText: fromCurrency,
-              ),
-              onChanged: (_) => convertir(),
-            ),
-            const SizedBox(height: 15),
-
-            // Botón para intercambiar
-            Center(
-              child: FloatingActionButton(
-                mini: true,
-                onPressed: intercambiarMonedas,
-                child: const Icon(Icons.swap_vert),
-              ),
-            ),
-            const SizedBox(height: 15),
-
-            // Moneda de destino
-            DropdownButton<String>(
-              value: toCurrency,
-              isExpanded: true,
-              items: currencies.map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    toCurrency = newValue;
-                    if (_fromController.text.isNotEmpty) {
-                      convertir();
-                    }
-                  });
-                }
-              },
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () =>
+                      _copiarMontoAlPortapapeles(_fromController, fromCurrency),
+                  tooltip: 'Copiar monto',
+                  icon: const Icon(Icons.copy),
+                ),
+              ],
             ),
             const SizedBox(height: 15),
 
             // Campo de salida
-            TextField(
-              controller: _toController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              readOnly: true,
-              decoration: InputDecoration(
-                labelText: 'Monto en $toCurrency',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _toController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'VES',
+                      // labelText: 'Bolívares',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      prefixIcon: const Icon(Icons.attach_money),
+                      suffixText: 'VES',
+                      suffixIcon: IconButton(
+                        onPressed: limpiarMontos,
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Limpiar montos',
+                      ),
+                    ),
+                    onChanged: (_) => _actualizarCampoDestino(desdeArriba: false),
+                  ),
                 ),
-                prefixIcon: const Icon(Icons.attach_money),
-                suffixText: toCurrency,
-              ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () =>
+                      _copiarMontoAlPortapapeles(_toController, 'VES'),
+                  tooltip: 'Copiar monto',
+                  icon: const Icon(Icons.copy),
+                ),
+              ],
             ),
             const SizedBox(height: 30),
 
@@ -340,33 +601,44 @@ class _ConversorPageState extends State<ConversorPage> {
     );
   }
 
-  Widget _buildRateCard(String currency, String rate) {
+  Widget _buildRateCard(
+    BuildContext context,
+    String currency,
+    String rate,
+    VoidCallback onTap,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          children: [
-            Text(
-              currency,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Ink(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            children: [
+              Text(
+                currency,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              '$rate Bs',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
+              const SizedBox(height: 5),
+              Text(
+                '$rate Bs',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primary,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
