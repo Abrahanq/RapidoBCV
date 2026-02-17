@@ -489,8 +489,8 @@ class _ConversorPageState extends State<ConversorPage> {
     if (index < 0 || index >= rateOptions.length) return 'Sin fecha';
 
     if (rateOptions.length == 2) {
-      final base = index == 0 ? 'Día pasado' : 'Día siguiente';
-      return '$base (${_formatearFechaCorta(rateOptions[index].lastUpdate)})';
+      final base = index == 0 ? 'Tasa del' : 'Tasa del';
+      return '$base ${_formatearFechaCorta(rateOptions[index].lastUpdate)}';
     }
 
     return _formatearFechaCorta(rateOptions[index].lastUpdate);
