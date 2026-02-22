@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -59,9 +60,14 @@ class ConversorPage extends StatefulWidget {
 
 class _ConversorPageState extends State<ConversorPage> {
   static const String _ratesCacheKey = 'exchange_rates_cache';
+  static const String _usdtRateCacheKey = 'usdt_rate_cache';
+  static const String _usdtRateUpdatedAtCacheKey = 'usdt_rate_updated_at_cache';
   bool _isUpdatingText = false;
+  DateTime? _usdtLastUpdatedAt;
 
   List<ExchangeRates> rateOptions = [];
+  List<String> _rateLabelsCache = const [];
+  String? _acquisitionTextCache;
   int selectedRateIndex = 0;
   ExchangeRates? rates;
   bool isLoading = true;
@@ -76,7 +82,27 @@ class _ConversorPageState extends State<ConversorPage> {
   @override
   void initState() {
     super.initState();
-    obtenerTasasActuales();
+    unawaited(_cargarInicialRapido());
+  }
+
+  Future<void> _cargarInicialRapido() async {
+    final cachedRates = await _leerTasasDesdeCache();
+
+    if (!mounted) return;
+
+    if (cachedRates != null) {
+      setState(() {
+        rates = cachedRates;
+        rateOptions = [cachedRates];
+        selectedRateIndex = 0;
+        isLoading = false;
+        error = null;
+        _actualizarTextosDerivados();
+      });
+      unawaited(_actualizarHomeWidget(cachedRates));
+    }
+
+    await obtenerTasasActuales(mostrarCarga: cachedRates == null);
   }
 
   double? _toDoubleOrNull(dynamic value) {
@@ -108,14 +134,7 @@ class _ConversorPageState extends State<ConversorPage> {
     final Map<String, dynamic> data =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
-    double usdtPromedioBinance;
-    try {
-      usdtPromedioBinance = await _obtenerPromedioUsdtBinance();
-    } catch (_) {
-      usdtPromedioBinance = 0;
-    }
-
-    final List<ExchangeRates> parsedRates = [];
+    final List<Map<String, dynamic>> bcvRecords = [];
     final precios = data['precios'];
 
     if (precios is List && precios.isNotEmpty) {
@@ -134,15 +153,12 @@ class _ConversorPageState extends State<ConversorPage> {
           parsedDate = DateTime.now();
         }
 
-        final usdtFromJson = _toDoubleOrNull(precioData['usdt']);
-        parsedRates.add(
-          ExchangeRates(
-            usdToVes: usd,
-            eurToVes: eur,
-            usdtToVes: usdtFromJson ?? (usdtPromedioBinance == 0 ? usd : usdtPromedioBinance),
-            lastUpdate: parsedDate,
-          ),
-        );
+        bcvRecords.add({
+          'usd': usd,
+          'eur': eur,
+          'usdt': _toDoubleOrNull(precioData['usdt']),
+          'date': parsedDate,
+        });
       }
     } else {
       final usd = _toDoubleOrNull(data['usd']);
@@ -156,13 +172,31 @@ class _ConversorPageState extends State<ConversorPage> {
           parsedDate = DateTime.now();
         }
 
-        final usdtFromJson = _toDoubleOrNull(data['usdt']);
+        bcvRecords.add({
+          'usd': usd,
+          'eur': eur,
+          'usdt': _toDoubleOrNull(data['usdt']),
+          'date': parsedDate,
+        });
+      }
+    }
+
+    final List<ExchangeRates> parsedRates = [];
+    if (bcvRecords.isNotEmpty) {
+      final fallbackUsd = (bcvRecords.last['usd'] as double?) ?? 0;
+      final hasMissingUsdt = bcvRecords.any((record) => record['usdt'] == null);
+      final fallbackUsdt =
+          hasMissingUsdt
+              ? await _obtenerUsdtConCacheHorario(fallbackUsd)
+              : fallbackUsd;
+
+      for (final record in bcvRecords) {
         parsedRates.add(
           ExchangeRates(
-            usdToVes: usd,
-            eurToVes: eur,
-            usdtToVes: usdtFromJson ?? (usdtPromedioBinance == 0 ? usd : usdtPromedioBinance),
-            lastUpdate: parsedDate,
+            usdToVes: record['usd'] as double,
+            eurToVes: record['eur'] as double,
+            usdtToVes: (record['usdt'] as double?) ?? fallbackUsdt,
+            lastUpdate: record['date'] as DateTime,
           ),
         );
       }
@@ -174,6 +208,42 @@ class _ConversorPageState extends State<ConversorPage> {
 
     parsedRates.sort((a, b) => a.lastUpdate.compareTo(b.lastUpdate));
     return parsedRates;
+  }
+
+  Future<double> _obtenerUsdtConCacheHorario(double fallbackUsd) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedUsdt = prefs.getDouble(_usdtRateCacheKey);
+    final cachedUpdatedAt = prefs.getString(_usdtRateUpdatedAtCacheKey);
+
+    if (cachedUsdt != null && cachedUpdatedAt != null) {
+      try {
+        final updatedAt = DateTime.parse(cachedUpdatedAt);
+        final age = DateTime.now().difference(updatedAt);
+        if (age < const Duration(hours: 1)) {
+          _usdtLastUpdatedAt = updatedAt;
+          return cachedUsdt;
+        }
+      } catch (_) {}
+    }
+
+    try {
+      final freshUsdt = await _obtenerPromedioUsdtBinance();
+      final now = DateTime.now();
+      await prefs.setDouble(_usdtRateCacheKey, freshUsdt);
+      await prefs.setString(
+        _usdtRateUpdatedAtCacheKey,
+        now.toIso8601String(),
+      );
+      _usdtLastUpdatedAt = now;
+      return freshUsdt;
+    } catch (_) {
+      if (cachedUpdatedAt != null) {
+        try {
+          _usdtLastUpdatedAt = DateTime.parse(cachedUpdatedAt);
+        } catch (_) {}
+      }
+      return cachedUsdt ?? fallbackUsd;
+    }
   }
 
   int _obtenerIndiceInicial(List<ExchangeRates> options) {
@@ -299,6 +369,14 @@ class _ConversorPageState extends State<ConversorPage> {
 
   Future<void> _manejarErrorConCache(String message) async {
     final cachedRates = await _leerTasasDesdeCache();
+    final fallbackRates =
+        cachedRates ??
+        ExchangeRates(
+          usdToVes: 0.22,
+          eurToVes: 7.33,
+          usdtToVes: 0.22,
+          lastUpdate: DateTime.now(),
+        );
 
     if (!mounted) return;
 
@@ -307,29 +385,27 @@ class _ConversorPageState extends State<ConversorPage> {
           ? '$message Mostrando última tasa guardada.'
           : '$message No hay datos guardados en caché.';
       isLoading = false;
-      rates =
-          cachedRates ??
-          ExchangeRates(
-            usdToVes: 0.22,
-            eurToVes: 7.33,
-            usdtToVes: 0.22,
-            lastUpdate: DateTime.now(),
-          );
+      rates = fallbackRates;
       rateOptions = [rates!];
       selectedRateIndex = 0;
+      _actualizarTextosDerivados();
     });
+    await _actualizarHomeWidget(fallbackRates);
   }
 
-  Future<void> obtenerTasasActuales() async {
+  Future<void> obtenerTasasActuales({bool mostrarCarga = true}) async {
     try {
-      setState(() {
-        isLoading = true;
-        error = null;
-      });
+      if (mostrarCarga) {
+        setState(() {
+          isLoading = true;
+          error = null;
+        });
+      }
 
       final fetchedRates = await obtenerPrecios();
       final initialIndex = _obtenerIndiceInicial(fetchedRates);
       final selectedRates = fetchedRates[initialIndex];
+      final latestRates = fetchedRates.last;
       await _guardarTasasEnCache(selectedRates);
 
       if (!mounted) return;
@@ -339,7 +415,9 @@ class _ConversorPageState extends State<ConversorPage> {
         selectedRateIndex = initialIndex;
         rates = selectedRates;
         isLoading = false;
+        _actualizarTextosDerivados();
       });
+      await _actualizarHomeWidget(latestRates);
     } on TimeoutException {
       await _manejarErrorConCache('Tiempo de espera agotado al consultar precios.');
     } on http.ClientException {
@@ -373,6 +451,57 @@ class _ConversorPageState extends State<ConversorPage> {
     return 1;
   }
 
+  double? _parseMonto(String input, {required bool isVes}) {
+    var normalized = input.trim().replaceAll(' ', '');
+    if (normalized.isEmpty) return null;
+
+    if (isVes) {
+      if (normalized.contains(',')) {
+        normalized = normalized.replaceAll('.', '');
+        normalized = normalized.replaceAll(',', '.');
+      } else {
+        final dotCount = '.'.allMatches(normalized).length;
+        if (dotCount > 1) {
+          normalized = normalized.replaceAll('.', '');
+        }
+      }
+    } else {
+      if (normalized.contains(',') && normalized.contains('.')) {
+        normalized = normalized.replaceAll('.', '');
+        normalized = normalized.replaceAll(',', '.');
+      } else {
+        normalized = normalized.replaceAll(',', '.');
+      }
+    }
+
+    return double.tryParse(normalized);
+  }
+
+  String _agregarSeparadoresMiles(String number) {
+    final isNegative = number.startsWith('-');
+    final digits = isNegative ? number.substring(1) : number;
+    final chars = digits.split('').reversed.toList();
+    final out = <String>[];
+
+    for (var i = 0; i < chars.length; i++) {
+      out.add(chars[i]);
+      if ((i + 1) % 3 == 0 && i + 1 < chars.length) {
+        out.add('.');
+      }
+    }
+
+    final formatted = out.reversed.join();
+    return isNegative ? '-$formatted' : formatted;
+  }
+
+  String _formatearMontoVes(double value) {
+    final fixed = value.toStringAsFixed(2);
+    final parts = fixed.split('.');
+    final intPart = _agregarSeparadoresMiles(parts[0]);
+    final decPart = parts.length > 1 ? parts[1] : '00';
+    return '$intPart,$decPart';
+  }
+
   void _setControllerText(TextEditingController controller, String value) {
     _isUpdatingText = true;
     controller.text = value;
@@ -397,18 +526,22 @@ class _ConversorPageState extends State<ConversorPage> {
       return;
     }
 
-    final normalized = input.replaceAll(',', '.');
-    final monto = double.tryParse(normalized);
+    final sourceCurrency = desdeArriba ? fromCurrency : 'VES';
+    final targetCurrency = desdeArriba ? 'VES' : fromCurrency;
+
+    final monto = _parseMonto(input, isVes: sourceCurrency == 'VES');
     if (monto == null) {
       _setControllerText(targetController, '');
       return;
     }
 
-    final sourceCurrency = desdeArriba ? fromCurrency : 'VES';
-    final targetCurrency = desdeArriba ? 'VES' : fromCurrency;
     final resultado = _convertirMonto(monto, sourceCurrency, targetCurrency);
+    final formatted =
+        targetCurrency == 'VES'
+            ? _formatearMontoVes(resultado)
+            : resultado.toStringAsFixed(2);
 
-    _setControllerText(targetController, resultado.toStringAsFixed(2));
+    _setControllerText(targetController, formatted);
   }
 
   void _recalcularConversionActual() {
@@ -433,9 +566,11 @@ class _ConversorPageState extends State<ConversorPage> {
   void _seleccionarRegistroTasa(int index) {
     if (index < 0 || index >= rateOptions.length) return;
 
+    final selected = rateOptions[index];
     setState(() {
       selectedRateIndex = index;
-      rates = rateOptions[index];
+      rates = selected;
+      _actualizarTextosDerivados();
     });
     _recalcularConversionActual();
   }
@@ -460,7 +595,16 @@ class _ConversorPageState extends State<ConversorPage> {
       return;
     }
 
-    final montoParaCopiar = monto.replaceAll('.', ',');
+    String montoParaCopiar;
+    if (currency == 'VES') {
+      final parsed = _parseMonto(monto, isVes: true);
+      montoParaCopiar =
+          parsed != null
+              ? parsed.toStringAsFixed(2).replaceAll('.', ',')
+              : monto.replaceAll('.', ',');
+    } else {
+      montoParaCopiar = monto.replaceAll('.', ',');
+    }
 
     await Clipboard.setData(ClipboardData(text: montoParaCopiar));
 
@@ -479,6 +623,35 @@ class _ConversorPageState extends State<ConversorPage> {
     return '$day/$month/$year $hour:$minute';
   }
 
+  String _formatearHora(DateTime dateTime) {
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  Future<void> _actualizarHomeWidget(ExchangeRates exchangeRates) async {
+    try {
+      final usdtUpdatedAt = _usdtLastUpdatedAt ?? DateTime.now();
+      await HomeWidget.saveWidgetData<String>(
+        'last_update',
+        '${_formatearFechaCorta(usdtUpdatedAt)} ${_formatearHora(usdtUpdatedAt)}',
+      );
+      await HomeWidget.saveWidgetData<String>(
+        'usd_value',
+        exchangeRates.usdToVes.toStringAsFixed(2),
+      );
+      await HomeWidget.saveWidgetData<String>(
+        'eur_value',
+        exchangeRates.eurToVes.toStringAsFixed(2),
+      );
+      await HomeWidget.saveWidgetData<String>(
+        'usdt_value',
+        exchangeRates.usdtToVes.toStringAsFixed(2),
+      );
+      await HomeWidget.updateWidget(androidName: 'RapidobcvWidgetProvider');
+    } catch (_) {}
+  }
+
   String _formatearFechaCorta(DateTime dateTime) {
     final day = dateTime.day.toString().padLeft(2, '0');
     final month = dateTime.month.toString().padLeft(2, '0');
@@ -494,6 +667,18 @@ class _ConversorPageState extends State<ConversorPage> {
     }
 
     return _formatearFechaCorta(rateOptions[index].lastUpdate);
+  }
+
+  void _actualizarTextosDerivados() {
+    _rateLabelsCache = List<String>.generate(
+      rateOptions.length,
+      (index) => _labelRegistro(index),
+    );
+
+    _acquisitionTextCache =
+        rates == null
+            ? null
+            : 'Fecha de adquisición: ${_formatearFechaAdquisicion(rates!.lastUpdate)}';
   }
 
   Icon _iconoMoneda(String currency) {
@@ -515,189 +700,30 @@ class _ConversorPageState extends State<ConversorPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Tarjeta de tasas actuales
-            Card(
-              elevation: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Tasas Actuales',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    if (isLoading)
-                      const CircularProgressIndicator()
-                    else if (error != null && rates == null)
-                      Column(
-                        children: [
-                          Text(
-                            error!,
-                            style: const TextStyle(color: Colors.orange),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            onPressed: obtenerTasasActuales,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Intentar de nuevo'),
-                          ),
-                        ],
-                      )
-                    else if (rates != null)
-                      Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              _buildRateCard(
-                                context,
-                                'USD',
-                                '${rates!.usdToVes.toStringAsFixed(2)}',
-                                () => _seleccionarMonedaDesdeTasa('USD'),
-                              ),
-                              const SizedBox(width: 10),
-                              _buildRateCard(
-                                context,
-                                'EUR',
-                                '${rates!.eurToVes.toStringAsFixed(2)}',
-                                () => _seleccionarMonedaDesdeTasa('EUR'),
-                              ),
-                              const SizedBox(width: 10),
-                              _buildRateCard(
-                                context,
-                                'USDT',
-                                '${rates!.usdtToVes.toStringAsFixed(2)}',
-                                () => _seleccionarMonedaDesdeTasa('USDT'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Fecha de adquisición: ${_formatearFechaAdquisicion(rates!.lastUpdate)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          if (rateOptions.length > 1) ...[
-                            const SizedBox(height: 12),
-                            SegmentedButton<int>(
-                              segments: List<ButtonSegment<int>>.generate(
-                                rateOptions.length,
-                                (index) => ButtonSegment<int>(
-                                  value: index,
-                                  label: Text(_labelRegistro(index)),
-                                ),
-                              ),
-                              selected: <int>{selectedRateIndex},
-                              onSelectionChanged: (Set<int> selection) {
-                                if (selection.isNotEmpty) {
-                                  _seleccionarRegistroTasa(selection.first);
-                                }
-                              },
-                            ),
-                          ],
-                        ],
-                      ),
-                  ],
-                ),
-              ),
+            _RatesPanel(
+              isLoading: isLoading,
+              error: error,
+              rates: rates,
+              selectedRateIndex: selectedRateIndex,
+              rateLabels: _rateLabelsCache,
+              onRetry: () => obtenerTasasActuales(),
+              onSelectCurrency: _seleccionarMonedaDesdeTasa,
+              onSelectRateIndex: _seleccionarRegistroTasa,
+              acquisitionText: _acquisitionTextCache,
             ),
             const SizedBox(height: 30),
-
-            // // Conversor
-            // const Text(
-            //   'Convertidor',
-            //   style: TextStyle(
-            //     fontSize: 20,
-            //     fontWeight: FontWeight.bold,
-            //   ),
-            // ),
-            const SizedBox(height: 20),
-
-            // Campo de entrada
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _fromController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: '$fromCurrency',
-                      // labelText: 'Dólares',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      prefixIcon: _iconoMoneda(fromCurrency),
-                      suffixText: fromCurrency,
-                      suffixIcon: IconButton(
-                        onPressed: limpiarMontos,
-                        icon: const Icon(Icons.clear),
-                        tooltip: 'Limpiar montos',
-                      ),
-                    ),
-                    onChanged: (_) => _actualizarCampoDestino(desdeArriba: true),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () =>
-                      _copiarMontoAlPortapapeles(_fromController, fromCurrency),
-                  tooltip: 'Copiar monto',
-                  icon: const Icon(Icons.copy),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
-
-            // Campo de salida
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _toController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: 'VES',
-                      // labelText: 'Bolívares',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      prefixIcon: const Icon(Icons.payments),
-                      suffixText: 'VES',
-                      suffixIcon: IconButton(
-                        onPressed: limpiarMontos,
-                        icon: const Icon(Icons.clear),
-                        tooltip: 'Limpiar montos',
-                      ),
-                    ),
-                    onChanged: (_) => _actualizarCampoDestino(desdeArriba: false),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () =>
-                      _copiarMontoAlPortapapeles(_toController, 'VES'),
-                  tooltip: 'Copiar monto',
-                  icon: const Icon(Icons.copy),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-
-            // Botón de actualizar
-            ElevatedButton.icon(
-              onPressed: obtenerTasasActuales,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Actualizar Tasas'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-              ),
+            _ConverterPanel(
+              fromController: _fromController,
+              toController: _toController,
+              fromCurrency: fromCurrency,
+              fromCurrencyIcon: _iconoMoneda(fromCurrency),
+              onClear: limpiarMontos,
+              onFromChanged: () => _actualizarCampoDestino(desdeArriba: true),
+              onToChanged: () => _actualizarCampoDestino(desdeArriba: false),
+              onCopyFrom: () =>
+                  _copiarMontoAlPortapapeles(_fromController, fromCurrency),
+              onCopyTo: () => _copiarMontoAlPortapapeles(_toController, 'VES'),
+              onRefreshRates: () => obtenerTasasActuales(),
             ),
           ],
         ),
@@ -705,12 +731,144 @@ class _ConversorPageState extends State<ConversorPage> {
     );
   }
 
-  Widget _buildRateCard(
-    BuildContext context,
-    String currency,
-    String rate,
-    VoidCallback onTap,
-  ) {
+  @override
+  void dispose() {
+    _fromController.dispose();
+    _toController.dispose();
+    super.dispose();
+  }
+}
+
+class _RatesPanel extends StatelessWidget {
+  const _RatesPanel({
+    required this.isLoading,
+    required this.error,
+    required this.rates,
+    required this.selectedRateIndex,
+    required this.rateLabels,
+    required this.onRetry,
+    required this.onSelectCurrency,
+    required this.onSelectRateIndex,
+    required this.acquisitionText,
+  });
+
+  final bool isLoading;
+  final String? error;
+  final ExchangeRates? rates;
+  final int selectedRateIndex;
+  final List<String> rateLabels;
+  final VoidCallback onRetry;
+  final ValueChanged<String> onSelectCurrency;
+  final ValueChanged<int> onSelectRateIndex;
+  final String? acquisitionText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          children: [
+            const Text(
+              'Tasas Actuales',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 15),
+            if (isLoading)
+              const CircularProgressIndicator()
+            else if (error != null && rates == null)
+              Column(
+                children: [
+                  Text(
+                    error!,
+                    style: const TextStyle(color: Colors.orange),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Intentar de nuevo'),
+                  ),
+                ],
+              )
+            else if (rates != null)
+              Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _RateTile(
+                        currency: 'USD',
+                        rate: rates!.usdToVes.toStringAsFixed(2),
+                        onTap: () => onSelectCurrency('USD'),
+                      ),
+                      const SizedBox(width: 10),
+                      _RateTile(
+                        currency: 'EUR',
+                        rate: rates!.eurToVes.toStringAsFixed(2),
+                        onTap: () => onSelectCurrency('EUR'),
+                      ),
+                      const SizedBox(width: 10),
+                      _RateTile(
+                        currency: 'USDT',
+                        rate: rates!.usdtToVes.toStringAsFixed(2),
+                        onTap: () => onSelectCurrency('USDT'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    acquisitionText ?? 'Fecha de adquisición: -',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  if (rateLabels.length > 1) ...[
+                    const SizedBox(height: 12),
+                    SegmentedButton<int>(
+                      segments: List<ButtonSegment<int>>.generate(
+                        rateLabels.length,
+                        (index) => ButtonSegment<int>(
+                          value: index,
+                          label: Text(rateLabels[index]),
+                        ),
+                      ),
+                      selected: <int>{selectedRateIndex},
+                      onSelectionChanged: (Set<int> selection) {
+                        if (selection.isNotEmpty) {
+                          onSelectRateIndex(selection.first);
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RateTile extends StatelessWidget {
+  const _RateTile({
+    required this.currency,
+    required this.rate,
+    required this.onTap,
+  });
+
+  final String currency;
+  final String rate;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Expanded(
@@ -747,11 +905,110 @@ class _ConversorPageState extends State<ConversorPage> {
       ),
     );
   }
+}
+
+class _ConverterPanel extends StatelessWidget {
+  const _ConverterPanel({
+    required this.fromController,
+    required this.toController,
+    required this.fromCurrency,
+    required this.fromCurrencyIcon,
+    required this.onClear,
+    required this.onFromChanged,
+    required this.onToChanged,
+    required this.onCopyFrom,
+    required this.onCopyTo,
+    required this.onRefreshRates,
+  });
+
+  final TextEditingController fromController;
+  final TextEditingController toController;
+  final String fromCurrency;
+  final Icon fromCurrencyIcon;
+  final VoidCallback onClear;
+  final VoidCallback onFromChanged;
+  final VoidCallback onToChanged;
+  final VoidCallback onCopyFrom;
+  final VoidCallback onCopyTo;
+  final VoidCallback onRefreshRates;
 
   @override
-  void dispose() {
-    _fromController.dispose();
-    _toController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: fromController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: fromCurrency,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  prefixIcon: fromCurrencyIcon,
+                  suffixText: fromCurrency,
+                  suffixIcon: IconButton(
+                    onPressed: onClear,
+                    icon: const Icon(Icons.clear),
+                    tooltip: 'Limpiar montos',
+                  ),
+                ),
+                onChanged: (_) => onFromChanged(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: onCopyFrom,
+              tooltip: 'Copiar monto',
+              icon: const Icon(Icons.copy),
+            ),
+          ],
+        ),
+        const SizedBox(height: 15),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: toController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'VES',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  prefixIcon: const Icon(Icons.payments),
+                  suffixText: 'VES',
+                  suffixIcon: IconButton(
+                    onPressed: onClear,
+                    icon: const Icon(Icons.clear),
+                    tooltip: 'Limpiar montos',
+                  ),
+                ),
+                onChanged: (_) => onToChanged(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: onCopyTo,
+              tooltip: 'Copiar monto',
+              icon: const Icon(Icons.copy),
+            ),
+          ],
+        ),
+        const SizedBox(height: 30),
+        ElevatedButton.icon(
+          onPressed: onRefreshRates,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Actualizar Tasas'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.all(16),
+          ),
+        ),
+      ],
+    );
   }
 }
