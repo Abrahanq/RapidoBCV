@@ -675,10 +675,27 @@ class _ConversorPageState extends State<ConversorPage> {
       (index) => _labelRegistro(index),
     );
 
+    DateTime? fechaAdquisicionVisible;
+    if (rates != null) {
+      final baseDate = rates!.lastUpdate;
+      final usdtTime = _usdtLastUpdatedAt;
+
+      fechaAdquisicionVisible =
+          usdtTime == null
+              ? baseDate
+              : DateTime(
+                baseDate.year,
+                baseDate.month,
+                baseDate.day,
+                usdtTime.hour,
+                usdtTime.minute,
+              );
+    }
+
     _acquisitionTextCache =
-        rates == null
+        fechaAdquisicionVisible == null
             ? null
-            : 'Fecha de adquisición: ${_formatearFechaAdquisicion(rates!.lastUpdate)}';
+            : 'Fecha de adquisición: ${_formatearFechaAdquisicion(fechaAdquisicionVisible)}';
   }
 
   Icon _iconoMoneda(String currency) {

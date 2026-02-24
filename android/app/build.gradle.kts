@@ -15,11 +15,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-<<<<<<< HEAD
     namespace = "com.abrahanq.rapidobcv"
-=======
-    namespace = "com.rapidobcv.app"
->>>>>>> a9172a4821da582c19c804db03c4ace722bdcab0
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -33,12 +29,7 @@ android {
     }
 
     defaultConfig {
-<<<<<<< HEAD
         applicationId = "com.abrahanq.rapidobcv"
-=======
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.rapidobcv.app"
->>>>>>> a9172a4821da582c19c804db03c4ace722bdcab0
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
