@@ -1,4 +1,4 @@
-package com.example.venezuela_dolar
+package com.rapidobcv.app
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager

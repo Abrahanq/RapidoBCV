@@ -1,4 +1,4 @@
-package com.example.venezuela_dolar
+package com.rapidobcv.app
 
 import io.flutter.embedding.android.FlutterActivity
 
