@@ -52,6 +52,25 @@ Salida:
 4. Escribir notas de la versión
 5. Review y Rollout
 
+## URL de Política de Privacidad (Play Console)
+
+Ya tienes una versión web en [docs/privacy.html](docs/privacy.html).
+
+URL esperada en GitHub Pages para este repo:
+
+`https://abrahanq.github.io/rapidoBCV/privacy.html`
+
+Pasos rápidos:
+
+1. Sube estos cambios a `main`.
+2. En GitHub: **Settings > Pages**.
+3. En **Build and deployment**, selecciona:
+	- **Source**: Deploy from a branch
+	- **Branch**: `main`
+	- **Folder**: `/docs`
+4. Guarda y espera 1-2 minutos.
+5. Abre la URL anterior y pégala en Play Console.
+
 ## Configuración Android actual
 
 - `applicationId`: `com.rapidobcv.app`
