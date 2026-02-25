@@ -10,8 +10,44 @@ void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  static const String _themeIsDarkKey = 'theme_is_dark';
+  ThemeMode _themeMode = ThemeMode.system;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadThemeMode());
+  }
+
+  Future<void> _loadThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDark = prefs.getBool(_themeIsDarkKey);
+    if (!mounted || isDark == null) return;
+
+    setState(() {
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    });
+  }
+
+  Future<void> _toggleTheme(bool isCurrentlyDark) async {
+    final nextMode =
+        isCurrentlyDark ? ThemeMode.light : ThemeMode.dark;
+
+    setState(() {
+      _themeMode = nextMode;
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_themeIsDarkKey, nextMode == ThemeMode.dark);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +66,10 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.dark,
         useMaterial3: true,
       ),
-      themeMode: ThemeMode.dark,
-      home: const ConversorPage(),
+      themeMode: _themeMode,
+      home: ConversorPage(
+        onToggleTheme: _toggleTheme,
+      ),
     );
   }
 }
@@ -52,7 +90,12 @@ class ExchangeRates {
 }
 
 class ConversorPage extends StatefulWidget {
-  const ConversorPage({super.key});
+  final ValueChanged<bool> onToggleTheme;
+
+  const ConversorPage({
+    super.key,
+    required this.onToggleTheme,
+  });
 
   @override
   State<ConversorPage> createState() => _ConversorPageState();
@@ -706,11 +749,24 @@ class _ConversorPageState extends State<ConversorPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('RápidoBCV'),
         centerTitle: true,
         elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: () => widget.onToggleTheme(isDarkMode),
+            tooltip: isDarkMode
+                ? 'Cambiar a modo claro'
+                : 'Cambiar a modo oscuro',
+            icon: Icon(
+              isDarkMode ? Icons.light_mode : Icons.dark_mode,
+            ),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
