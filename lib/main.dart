@@ -781,6 +781,7 @@ class _ConversorPageState extends State<ConversorPage> {
               isLoading: isLoading,
               error: error,
               rates: rates,
+              selectedCurrency: fromCurrency,
               selectedRateIndex: selectedRateIndex,
               rateLabels: _rateLabelsCache,
               onRetry: () => obtenerTasasActuales(),
@@ -821,6 +822,7 @@ class _RatesPanel extends StatelessWidget {
     required this.isLoading,
     required this.error,
     required this.rates,
+    required this.selectedCurrency,
     required this.selectedRateIndex,
     required this.rateLabels,
     required this.onRetry,
@@ -832,6 +834,7 @@ class _RatesPanel extends StatelessWidget {
   final bool isLoading;
   final String? error;
   final ExchangeRates? rates;
+  final String selectedCurrency;
   final int selectedRateIndex;
   final List<String> rateLabels;
   final VoidCallback onRetry;
@@ -882,18 +885,21 @@ class _RatesPanel extends StatelessWidget {
                       _RateTile(
                         currency: 'USD',
                         rate: rates!.usdToVes.toStringAsFixed(2),
+                        isSelected: selectedCurrency == 'USD',
                         onTap: () => onSelectCurrency('USD'),
                       ),
                       const SizedBox(width: 10),
                       _RateTile(
                         currency: 'EUR',
                         rate: rates!.eurToVes.toStringAsFixed(2),
+                        isSelected: selectedCurrency == 'EUR',
                         onTap: () => onSelectCurrency('EUR'),
                       ),
                       const SizedBox(width: 10),
                       _RateTile(
                         currency: 'USDT',
                         rate: rates!.usdtToVes.toStringAsFixed(2),
+                        isSelected: selectedCurrency == 'USDT',
                         onTap: () => onSelectCurrency('USDT'),
                       ),
                     ],
@@ -937,11 +943,13 @@ class _RateTile extends StatelessWidget {
   const _RateTile({
     required this.currency,
     required this.rate,
+    required this.isSelected,
     required this.onTap,
   });
 
   final String currency;
   final String rate;
+  final bool isSelected;
   final VoidCallback onTap;
 
   @override
@@ -955,16 +963,30 @@ class _RateTile extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
+            color:
+                isSelected
+                    ? colorScheme.primaryContainer
+                    : colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color:
+                  isSelected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
+              width: isSelected ? 1.8 : 1,
+            ),
           ),
           child: Column(
             children: [
               Text(
                 currency,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
+                  color:
+                      isSelected
+                          ? colorScheme.onPrimaryContainer
+                          : colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 5),
@@ -973,7 +995,10 @@ class _RateTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
+                  color:
+                      isSelected
+                          ? colorScheme.onPrimaryContainer
+                          : colorScheme.primary,
                 ),
               ),
             ],
