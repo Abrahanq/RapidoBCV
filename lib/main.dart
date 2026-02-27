@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -105,6 +106,8 @@ class _ConversorPageState extends State<ConversorPage> {
   static const String _ratesCacheKey = 'exchange_rates_cache';
   static const String _usdtRateCacheKey = 'usdt_rate_cache';
   static const String _usdtRateUpdatedAtCacheKey = 'usdt_rate_updated_at_cache';
+  static const String _binanceP2pEndpoint =
+      'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
   bool _isUpdatingText = false;
   DateTime? _usdtLastUpdatedAt;
 
@@ -301,9 +304,10 @@ class _ConversorPageState extends State<ConversorPage> {
   }
 
   Future<double> _obtenerPrecioUsdtBinancePorTipo(String tradeType) async {
-    final uri = Uri.parse(
-      'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search',
-    );
+    final uri =
+        kIsWeb
+            ? Uri.parse('https://corsproxy.io/?$_binanceP2pEndpoint')
+            : Uri.parse(_binanceP2pEndpoint);
 
     final response = await http
         .post(
