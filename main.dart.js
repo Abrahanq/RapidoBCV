@@ -79754,7 +79754,7 @@ if(!p)r=q}return r},
 r1(a){return this.a8G(a)},
 a8G(a){var s=0,r=A.N(t.i),q,p=this,o,n,m,l,k,j,i
 var $async$r1=A.O(function(b,c){if(b===1)return A.K(c,r)
-for(;;)switch(s){case 0:l=A.fH("https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search")
+for(;;)switch(s){case 0:l=A.fH("https://corsproxy.io/?https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search")
 k=t.N
 j=A.ad(["Content-Type","application/json","Accept","application/json"],k,k)
 s=3
