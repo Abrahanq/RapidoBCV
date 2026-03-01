@@ -1,11 +1,11 @@
 {
-    "name": "RápidoBCV",
-    "short_name": "RápidoBCV",
+    "name": "venezuela_dolar",
+    "short_name": "venezuela_dolar",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Consulta rápida y actualizada del dólar BCV en Venezuela.",
+    "description": "A new Flutter project.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
