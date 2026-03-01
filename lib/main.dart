@@ -1102,12 +1102,15 @@ class _ConverterPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 30),
-        ElevatedButton.icon(
-          onPressed: onRefreshRates,
-          icon: const Icon(Icons.refresh),
-          label: const Text('Actualizar Tasas'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.all(16),
+        Align(
+          alignment: Alignment.center,
+          child: ElevatedButton.icon(
+            onPressed: onRefreshRates,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Actualizar Tasas'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.all(16),
+            ),
           ),
         ),
       ],
