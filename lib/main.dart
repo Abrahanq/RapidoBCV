@@ -1276,7 +1276,7 @@ class _UsdCalculatorPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Calculadora',
+              'Calculadora de compras',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
