@@ -122,6 +122,10 @@ class _ConversorPageState extends State<ConversorPage> {
   // Controllers para las conversiones
   final TextEditingController _fromController = TextEditingController();
   final TextEditingController _toController = TextEditingController();
+  final TextEditingController _calculatorUsdController = TextEditingController();
+  final TextEditingController _calculatorVesController = TextEditingController();
+
+  final List<_CalculatorEntry> _calculatorEntries = <_CalculatorEntry>[];
   
   String fromCurrency = 'USD';
 
@@ -629,6 +633,104 @@ class _ConversorPageState extends State<ConversorPage> {
     });
   }
 
+  double get _calculatorTotalUsd {
+    final usdRate = rates?.usdToVes ?? 0;
+    return _calculatorEntries.fold<double>(0, (previousValue, entry) {
+      if (entry.currency == 'USD') {
+        return previousValue + entry.amount;
+      }
+
+      if (usdRate <= 0) {
+        return previousValue;
+      }
+
+      return previousValue + (entry.amount / usdRate);
+    });
+  }
+
+  double get _calculatorTotalVes {
+    final usdRate = rates?.usdToVes ?? 0;
+    return _calculatorEntries.fold<double>(0, (previousValue, entry) {
+      if (entry.currency == 'VES') {
+        return previousValue + entry.amount;
+      }
+
+      return previousValue + (entry.amount * usdRate);
+    });
+  }
+
+  void _agregarMontoCalculadoraUsd() {
+    final input = _calculatorUsdController.text.trim();
+    final monto = _parseMonto(input, isVes: false);
+
+    if (monto == null || monto <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa un monto válido mayor a cero en USD.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _calculatorEntries.add(
+        _CalculatorEntry(currency: 'USD', amount: monto),
+      );
+      _calculatorUsdController.clear();
+    });
+  }
+
+  void _agregarMontoCalculadoraVes() {
+    final input = _calculatorVesController.text.trim();
+    final monto = _parseMonto(input, isVes: true);
+
+    if (monto == null || monto <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa un monto válido mayor a cero en Bs.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _calculatorEntries.add(
+        _CalculatorEntry(currency: 'VES', amount: monto),
+      );
+      _calculatorVesController.clear();
+    });
+  }
+
+  void _deshacerUltimoMontoCalculadora() {
+    if (_calculatorEntries.isEmpty) return;
+
+    setState(() {
+      _calculatorEntries.removeLast();
+    });
+  }
+
+  void _limpiarCalculadora() {
+    if (_calculatorEntries.isEmpty &&
+        _calculatorUsdController.text.isEmpty &&
+        _calculatorVesController.text.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _calculatorEntries.clear();
+      _calculatorUsdController.clear();
+      _calculatorVesController.clear();
+    });
+  }
+
+  void _eliminarMontoCalculadora(int index) {
+    if (index < 0 || index >= _calculatorEntries.length) return;
+
+    setState(() {
+      _calculatorEntries.removeAt(index);
+    });
+  }
+
   Future<void> _copiarMontoAlPortapapeles(
     TextEditingController controller,
     String currency,
@@ -803,6 +905,21 @@ class _ConversorPageState extends State<ConversorPage> {
               onCopyTo: () => _copiarMontoAlPortapapeles(_toController, 'VES'),
               onRefreshRates: () => obtenerTasasActuales(),
             ),
+            const SizedBox(height: 20),
+            _UsdCalculatorPanel(
+              usdInputController: _calculatorUsdController,
+              vesInputController: _calculatorVesController,
+              entries: _calculatorEntries,
+              totalUsdText: _calculatorTotalUsd.toStringAsFixed(2),
+              totalVesText: _formatearMontoVes(_calculatorTotalVes),
+              usdRateText:
+                  rates == null ? '-' : rates!.usdToVes.toStringAsFixed(2),
+              onAddUsd: _agregarMontoCalculadoraUsd,
+              onAddVes: _agregarMontoCalculadoraVes,
+              onUndoLast: _deshacerUltimoMontoCalculadora,
+              onClear: _limpiarCalculadora,
+              onRemoveEntry: _eliminarMontoCalculadora,
+            ),
           ],
         ),
       ),
@@ -813,6 +930,8 @@ class _ConversorPageState extends State<ConversorPage> {
   void dispose() {
     _fromController.dispose();
     _toController.dispose();
+    _calculatorUsdController.dispose();
+    _calculatorVesController.dispose();
     super.dispose();
   }
 }
@@ -1116,4 +1235,212 @@ class _ConverterPanel extends StatelessWidget {
       ],
     );
   }
+}
+
+class _UsdCalculatorPanel extends StatelessWidget {
+  const _UsdCalculatorPanel({
+    required this.usdInputController,
+    required this.vesInputController,
+    required this.entries,
+    required this.totalUsdText,
+    required this.totalVesText,
+    required this.usdRateText,
+    required this.onAddUsd,
+    required this.onAddVes,
+    required this.onUndoLast,
+    required this.onClear,
+    required this.onRemoveEntry,
+  });
+
+  final TextEditingController usdInputController;
+  final TextEditingController vesInputController;
+  final List<_CalculatorEntry> entries;
+  final String totalUsdText;
+  final String totalVesText;
+  final String usdRateText;
+  final VoidCallback onAddUsd;
+  final VoidCallback onAddVes;
+  final VoidCallback onUndoLast;
+  final VoidCallback onClear;
+  final ValueChanged<int> onRemoveEntry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Calculadora',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Equivalente: $totalVesText Bs',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Total acumulado: $totalUsdText USD',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tasa usada (BCV USD): $usdRateText Bs',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: usdInputController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: false,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'Monto en USD',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      prefixIcon: const Icon(Icons.attach_money),
+                      suffixText: 'USD',
+                    ),
+                    onSubmitted: (_) => onAddUsd(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed: onAddUsd,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Sumar USD'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: vesInputController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: false,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'Monto en Bs',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      prefixIcon: const Icon(Icons.payments),
+                      suffixText: 'VES',
+                    ),
+                    onSubmitted: (_) => onAddVes(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed: onAddVes,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Sumar Bs'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (entries.isEmpty)
+              Text(
+                'Aún no hay montos agregados.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children:
+                    entries
+                        .asMap()
+                        .entries
+                        .map(
+                          (entry) => Chip(
+                            label: Text(
+                              '${entry.value.amount.toStringAsFixed(2)} ${entry.value.currency}',
+                            ),
+                            onDeleted: () => onRemoveEntry(entry.key),
+                            deleteIcon: const Icon(Icons.close),
+                          ),
+                        )
+                        .toList(),
+              ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onUndoLast,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Deshacer último'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onClear,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Limpiar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CalculatorEntry {
+  const _CalculatorEntry({
+    required this.currency,
+    required this.amount,
+  });
+
+  final String currency;
+  final double amount;
 }
