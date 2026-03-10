@@ -38,6 +38,11 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         val usdtUpdatedAtMillis: Long,
     )
 
+    private data class CachedUsdt(
+        val value: String,
+        val updatedAtMillis: Long,
+    )
+
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         scheduleHourlyRefresh(context)
@@ -86,6 +91,10 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         val usdtValue = widgetData.getString("usdt_value", null)
             ?: cache.getString("usdt_value", "-")
             ?: "-"
+
+        // Keep native cache aligned with values pushed from Flutter to avoid
+        // replacing USDT with USD when Binance is temporarily unavailable.
+        persistCurrentWidgetSnapshot(context, lastUpdate, usdValue, eurValue, usdtValue)
 
         updateWidgets(context, appWidgetManager, appWidgetIds, lastUpdate, usdValue, eurValue, usdtValue)
         refreshFromNetworkAsync(context)
@@ -183,8 +192,19 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
                 val selectedRecord = selectRateForWidget(records) ?: return null
 
                 val usdtResult = fetchUsdtFromBinance(context)
-                val usdtValue = usdtResult?.first ?: selectedRecord.usdt
-                val usdtUpdatedAt = usdtResult?.second ?: selectedRecord.usdtUpdatedAtMillis
+                val cachedUsdt = getCachedUsdt(context)
+                val usdtValue = when {
+                    usdtResult != null -> usdtResult.first
+                    selectedRecord.usdt != "-" -> selectedRecord.usdt
+                    cachedUsdt != null -> cachedUsdt.value
+                    else -> selectedRecord.usd
+                }
+                val usdtUpdatedAt = when {
+                    usdtResult != null -> usdtResult.second
+                    selectedRecord.usdt != "-" -> selectedRecord.usdtUpdatedAtMillis
+                    cachedUsdt != null -> cachedUsdt.updatedAtMillis
+                    else -> selectedRecord.timestamp
+                }
 
                 selectedRecord.copy(
                     usdt = usdtValue,
@@ -203,7 +223,7 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
             val sell = fetchUsdtPriceByType("SELL")
             val average = (buy + sell) / 2.0
             Pair(String.format(Locale.US, "%.2f", average), System.currentTimeMillis())
-        }.getOrNull() ?: getLastCachedUsdt(context)
+        }.getOrNull() ?: getCachedUsdt(context)?.let { Pair(it.value, it.updatedAtMillis) }
     }
 
     private fun fetchUsdtPriceByType(tradeType: String): Double {
@@ -281,7 +301,7 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         }
 
         val usdtRaw = record.optDouble("usdt", Double.NaN)
-        val usdt = if (usdtRaw.isNaN()) usd else usdtRaw
+        val usdtText = if (usdtRaw.isNaN()) "-" else String.format(Locale.US, "%.2f", usdtRaw)
         val dateText = record.optString("date", record.optString("fecha", ""))
         val timestamp = parseIsoDateToTimestamp(dateText)
         val formattedDate = formatUsdtUpdateLabel(timestamp)
@@ -289,10 +309,10 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         return WidgetRates(
             usd = String.format(Locale.US, "%.2f", usd),
             eur = String.format(Locale.US, "%.2f", eur),
-            usdt = String.format(Locale.US, "%.2f", usdt),
+            usdt = usdtText,
             lastUpdate = formattedDate,
             timestamp = timestamp,
-            usdtUpdatedAtMillis = timestamp,
+            usdtUpdatedAtMillis = if (usdtRaw.isNaN()) 0L else timestamp,
         )
     }
 
@@ -351,12 +371,42 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
             .apply()
     }
 
-    private fun getLastCachedUsdt(context: Context): Pair<String, Long>? {
+    private fun persistCurrentWidgetSnapshot(
+        context: Context,
+        lastUpdate: String,
+        usdValue: String,
+        eurValue: String,
+        usdtValue: String,
+    ) {
         val cache = context.getSharedPreferences(WIDGET_CACHE_NAME, Context.MODE_PRIVATE)
-        val usdt = cache.getString("usdt_value", null) ?: return null
-        val updatedAt = cache.getLong(CACHE_USDT_UPDATED_AT, 0L)
-        if (updatedAt <= 0L) return null
-        return Pair(usdt, updatedAt)
+        val previousUsdtUpdatedAt = cache.getLong(CACHE_USDT_UPDATED_AT, 0L)
+        val normalizedUsdt = usdtValue.trim()
+        val usdtUpdatedAt = when {
+            normalizedUsdt.isEmpty() || normalizedUsdt == "-" -> previousUsdtUpdatedAt
+            previousUsdtUpdatedAt > 0L -> previousUsdtUpdatedAt
+            else -> System.currentTimeMillis()
+        }
+
+        cache.edit()
+            .putString("last_update", lastUpdate)
+            .putString("usd_value", usdValue)
+            .putString("eur_value", eurValue)
+            .putString("usdt_value", usdtValue)
+            .putLong(CACHE_USDT_UPDATED_AT, usdtUpdatedAt)
+            .putLong(CACHE_BCV_TIMESTAMP, System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun getCachedUsdt(context: Context): CachedUsdt? {
+        val cache = context.getSharedPreferences(WIDGET_CACHE_NAME, Context.MODE_PRIVATE)
+        val usdt = cache.getString("usdt_value", null)?.trim()
+        if (usdt.isNullOrEmpty() || usdt == "-") return null
+
+        val updatedAt = cache.getLong(CACHE_USDT_UPDATED_AT, 0L).takeIf { it > 0L }
+            ?: cache.getLong(CACHE_BCV_TIMESTAMP, 0L).takeIf { it > 0L }
+            ?: System.currentTimeMillis()
+
+        return CachedUsdt(usdt, updatedAt)
     }
 
     private fun scheduleHourlyRefresh(context: Context) {
