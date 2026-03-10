@@ -19,10 +19,14 @@ import java.util.TimeZone
 
 class RapidobcvWidgetProvider : HomeWidgetProvider() {
     companion object {
-        private const val ACTION_DAILY_REFRESH = "com.abrahanq.rapidobcv.action.DAILY_WIDGET_REFRESH"
+        private const val ACTION_HOURLY_REFRESH = "com.abrahanq.rapidobcv.action.HOURLY_WIDGET_REFRESH"
         private const val REFRESH_REQUEST_CODE = 4201
         private const val WIDGET_CACHE_NAME = "rapidobcv_widget_cache"
+        private const val CACHE_USDT_UPDATED_AT = "usdt_updated_at_millis"
+        private const val CACHE_BCV_TIMESTAMP = "bcv_timestamp_millis"
         private const val PRICES_ENDPOINT = "https://abrahanq.github.io/bcv-price/prices.json"
+        private const val BINANCE_P2P_ENDPOINT =
+            "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
     }
 
     private data class WidgetRates(
@@ -31,16 +35,17 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         val usdt: String,
         val lastUpdate: String,
         val timestamp: Long,
+        val usdtUpdatedAtMillis: Long,
     )
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        scheduleDailyRefresh(context)
+        scheduleHourlyRefresh(context)
         refreshFromNetworkAsync(context)
     }
 
     override fun onDisabled(context: Context) {
-        cancelDailyRefresh(context)
+        cancelHourlyRefresh(context)
         super.onDisabled(context)
     }
 
@@ -48,13 +53,13 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         super.onReceive(context, intent)
 
         when (intent.action) {
-            ACTION_DAILY_REFRESH -> {
-                scheduleDailyRefresh(context)
+            ACTION_HOURLY_REFRESH -> {
+                scheduleHourlyRefresh(context)
                 refreshFromNetworkAsync(context)
             }
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                scheduleDailyRefresh(context)
+                scheduleHourlyRefresh(context)
                 refreshFromNetworkAsync(context)
             }
         }
@@ -66,7 +71,7 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences,
     ) {
-        scheduleDailyRefresh(context)
+        scheduleHourlyRefresh(context)
 
         val cache = context.getSharedPreferences(WIDGET_CACHE_NAME, Context.MODE_PRIVATE)
         val lastUpdate = widgetData.getString("last_update", null)
@@ -129,7 +134,7 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
     private fun refreshFromNetworkAsync(context: Context) {
         Thread {
             runCatching {
-                val rates = fetchLatestRates() ?: return@runCatching
+                val rates = fetchLatestRates(context) ?: return@runCatching
                 persistRates(context, rates)
                 val appWidgetManager = AppWidgetManager.getInstance(context)
                 val ids = appWidgetManager.getAppWidgetIds(
@@ -150,7 +155,7 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         }.start()
     }
 
-    private fun fetchLatestRates(): WidgetRates? {
+    private fun fetchLatestRates(context: Context): WidgetRates? {
         val connection = URL(PRICES_ENDPOINT).openConnection() as HttpURLConnection
         connection.connectTimeout = 10000
         connection.readTimeout = 10000
@@ -175,11 +180,97 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
                     parseRateRecord(root)?.let(records::add)
                 }
 
-                records.maxByOrNull { it.timestamp }
+                val selectedRecord = selectRateForWidget(records) ?: return null
+
+                val usdtResult = fetchUsdtFromBinance(context)
+                val usdtValue = usdtResult?.first ?: selectedRecord.usdt
+                val usdtUpdatedAt = usdtResult?.second ?: selectedRecord.usdtUpdatedAtMillis
+
+                selectedRecord.copy(
+                    usdt = usdtValue,
+                    lastUpdate = formatUsdtUpdateLabel(usdtUpdatedAt),
+                    usdtUpdatedAtMillis = usdtUpdatedAt,
+                )
             }
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun fetchUsdtFromBinance(context: Context): Pair<String, Long>? {
+        return runCatching {
+            val buy = fetchUsdtPriceByType("BUY")
+            val sell = fetchUsdtPriceByType("SELL")
+            val average = (buy + sell) / 2.0
+            Pair(String.format(Locale.US, "%.2f", average), System.currentTimeMillis())
+        }.getOrNull() ?: getLastCachedUsdt(context)
+    }
+
+    private fun fetchUsdtPriceByType(tradeType: String): Double {
+        val connection = URL(BINANCE_P2P_ENDPOINT).openConnection() as HttpURLConnection
+        connection.connectTimeout = 10000
+        connection.readTimeout = 10000
+        connection.requestMethod = "POST"
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.setRequestProperty("Accept", "application/json")
+        connection.doOutput = true
+
+        val payload = JSONObject().apply {
+            put("page", 1)
+            put("rows", 1)
+            put("payTypes", org.json.JSONArray())
+            put("asset", "USDT")
+            put("tradeType", tradeType)
+            put("fiat", "VES")
+            put("publisherType", "merchant")
+        }
+
+        return try {
+            connection.outputStream.bufferedWriter().use { writer ->
+                writer.write(payload.toString())
+            }
+
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                throw IllegalStateException("Binance HTTP ${'$'}{connection.responseCode}")
+            }
+
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val root = JSONObject(body)
+            val rows = root.optJSONArray("data") ?: throw IllegalStateException("Binance sin data")
+            if (rows.length() == 0) throw IllegalStateException("Binance sin filas")
+
+            val first = rows.optJSONObject(0) ?: throw IllegalStateException("Fila inválida")
+            val adv = first.optJSONObject("adv") ?: throw IllegalStateException("adv inválido")
+            val rawPrice = adv.optString("price", "")
+            rawPrice.toDoubleOrNull() ?: throw IllegalStateException("Precio inválido")
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun selectRateForWidget(options: List<WidgetRates>): WidgetRates? {
+        if (options.isEmpty()) return null
+
+        val now = Calendar.getInstance()
+        val isWeekend =
+            now.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY ||
+                now.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY
+        if (isWeekend) {
+            return options.maxByOrNull { it.timestamp }
+        }
+
+        val todayRate = options.lastOrNull { isSameDate(it.timestamp, now.timeInMillis) }
+        if (todayRate != null) {
+            return todayRate
+        }
+
+        for (i in options.indices.reversed()) {
+            if (options[i].timestamp <= now.timeInMillis) {
+                return options[i]
+            }
+        }
+
+        return options.maxByOrNull { it.timestamp }
     }
 
     private fun parseRateRecord(record: JSONObject): WidgetRates? {
@@ -193,7 +284,7 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         val usdt = if (usdtRaw.isNaN()) usd else usdtRaw
         val dateText = record.optString("date", record.optString("fecha", ""))
         val timestamp = parseIsoDateToTimestamp(dateText)
-        val formattedDate = formatShortDate(timestamp)
+        val formattedDate = formatUsdtUpdateLabel(timestamp)
 
         return WidgetRates(
             usd = String.format(Locale.US, "%.2f", usd),
@@ -201,7 +292,16 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
             usdt = String.format(Locale.US, "%.2f", usdt),
             lastUpdate = formattedDate,
             timestamp = timestamp,
+            usdtUpdatedAtMillis = timestamp,
         )
+    }
+
+    private fun isSameDate(aMillis: Long, bMillis: Long): Boolean {
+        val a = Calendar.getInstance().apply { timeInMillis = aMillis }
+        val b = Calendar.getInstance().apply { timeInMillis = bMillis }
+        return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
+            a.get(Calendar.MONTH) == b.get(Calendar.MONTH) &&
+            a.get(Calendar.DAY_OF_MONTH) == b.get(Calendar.DAY_OF_MONTH)
     }
 
     private fun parseIsoDateToTimestamp(dateText: String): Long {
@@ -232,13 +332,11 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         }
     }
 
-    private fun formatShortDate(timestamp: Long): String {
+    private fun formatUsdtUpdateLabel(timestamp: Long): String {
         val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
-        val day = calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
-        val month = (calendar.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
         val hour = calendar.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
         val minute = calendar.get(Calendar.MINUTE).toString().padStart(2, '0')
-        return "$day/$month $hour:$minute"
+        return "USDT: $hour:$minute"
     }
 
     private fun persistRates(context: Context, rates: WidgetRates) {
@@ -248,13 +346,23 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
             .putString("usd_value", rates.usd)
             .putString("eur_value", rates.eur)
             .putString("usdt_value", rates.usdt)
+            .putLong(CACHE_USDT_UPDATED_AT, rates.usdtUpdatedAtMillis)
+            .putLong(CACHE_BCV_TIMESTAMP, rates.timestamp)
             .apply()
     }
 
-    private fun scheduleDailyRefresh(context: Context) {
+    private fun getLastCachedUsdt(context: Context): Pair<String, Long>? {
+        val cache = context.getSharedPreferences(WIDGET_CACHE_NAME, Context.MODE_PRIVATE)
+        val usdt = cache.getString("usdt_value", null) ?: return null
+        val updatedAt = cache.getLong(CACHE_USDT_UPDATED_AT, 0L)
+        if (updatedAt <= 0L) return null
+        return Pair(usdt, updatedAt)
+    }
+
+    private fun scheduleHourlyRefresh(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val refreshIntent = Intent(context, RapidobcvWidgetProvider::class.java).apply {
-            action = ACTION_DAILY_REFRESH
+            action = ACTION_HOURLY_REFRESH
         }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val pendingIntent = PendingIntent.getBroadcast(
@@ -265,12 +373,12 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         )
 
         val nextRun = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 1)
+            set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-            if (before(Calendar.getInstance()) || timeInMillis <= System.currentTimeMillis()) {
-                add(Calendar.DAY_OF_YEAR, 1)
+            add(Calendar.HOUR_OF_DAY, 1)
+            if (timeInMillis <= System.currentTimeMillis()) {
+                add(Calendar.HOUR_OF_DAY, 1)
             }
         }
 
@@ -289,9 +397,9 @@ class RapidobcvWidgetProvider : HomeWidgetProvider() {
         }
     }
 
-    private fun cancelDailyRefresh(context: Context) {
+    private fun cancelHourlyRefresh(context: Context) {
         val refreshIntent = Intent(context, RapidobcvWidgetProvider::class.java).apply {
-            action = ACTION_DAILY_REFRESH
+            action = ACTION_HOURLY_REFRESH
         }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val pendingIntent = PendingIntent.getBroadcast(
