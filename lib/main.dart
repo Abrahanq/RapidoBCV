@@ -307,6 +307,47 @@ class _ConversorPageState extends State<ConversorPage> {
     return index;
   }
 
+  bool _esMismaFecha(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  ExchangeRates _obtenerTasaParaWidget(List<ExchangeRates> options) {
+    if (options.isEmpty) {
+      throw const FormatException('No hay tasas disponibles para el widget');
+    }
+
+    final now = DateTime.now();
+    final hoy = DateTime(now.year, now.month, now.day);
+    final isWeekend =
+        now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
+
+    // En fin de semana se usa la tasa mas reciente que devuelve el JSON.
+    if (isWeekend) {
+      return options.last;
+    }
+
+    ExchangeRates? tasaDeHoy;
+    for (final rate in options) {
+      if (_esMismaFecha(rate.lastUpdate, hoy)) {
+        tasaDeHoy = rate;
+      }
+    }
+
+    if (tasaDeHoy != null) {
+      return tasaDeHoy;
+    }
+
+    // Si no hay registro exacto de hoy, usa el mas reciente no futuro.
+    for (int i = options.length - 1; i >= 0; i--) {
+      if (!options[i].lastUpdate.isAfter(now)) {
+        return options[i];
+      }
+    }
+
+    // Ultimo fallback: el registro mas reciente del JSON.
+    return options.last;
+  }
+
   Future<double> _obtenerPrecioUsdtBinancePorTipo(String tradeType) async {
     final uri =
         kIsWeb
@@ -456,7 +497,7 @@ class _ConversorPageState extends State<ConversorPage> {
       final fetchedRates = await obtenerPrecios();
       final initialIndex = _obtenerIndiceInicial(fetchedRates);
       final selectedRates = fetchedRates[initialIndex];
-      final latestRates = fetchedRates.last;
+      final widgetRates = _obtenerTasaParaWidget(fetchedRates);
       await _guardarTasasEnCache(selectedRates);
 
       if (!mounted) return;
@@ -468,7 +509,7 @@ class _ConversorPageState extends State<ConversorPage> {
         isLoading = false;
         _actualizarTextosDerivados();
       });
-      await _actualizarHomeWidget(latestRates);
+      await _actualizarHomeWidget(widgetRates);
     } on TimeoutException {
       await _manejarErrorConCache('Tiempo de espera agotado al consultar precios.');
     } on http.ClientException {
