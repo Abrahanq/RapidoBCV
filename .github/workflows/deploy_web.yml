@@ -30,6 +30,9 @@ jobs:
       - name: Build web release
         run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
 
+      - name: Add privacy policy page
+        run: cp docs/privacy.html build/web/privacy.html
+
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:

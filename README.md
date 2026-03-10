@@ -62,14 +62,16 @@ URL esperada en GitHub Pages para este repo:
 
 Pasos rápidos:
 
-1. Sube estos cambios a `main`.
-2. En GitHub: **Settings > Pages**.
-3. En **Build and deployment**, selecciona:
+1. En GitHub: **Settings > Pages**.
+2. En **Build and deployment**, selecciona:
 	- **Source**: Deploy from a branch
-	- **Branch**: `main`
-	- **Folder**: `/docs`
-4. Guarda y espera 1-2 minutos.
+	- **Branch**: `gh-pages`
+	- **Folder**: `/ (root)`
+3. Sube cambios a `main` para que se ejecute el workflow `Deploy Flutter Web to GitHub Pages`.
+4. Espera 1-2 minutos a que termine el deploy.
 5. Abre la URL anterior y pégala en Play Console.
+
+Nota: el workflow copia automáticamente `docs/privacy.html` a `build/web/privacy.html` antes de publicar en `gh-pages`.
 
 ## Configuración Android actual
 
