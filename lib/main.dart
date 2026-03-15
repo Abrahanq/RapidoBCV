@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 void main() {
   runApp(const MyApp());
@@ -110,6 +115,7 @@ class _ConversorPageState extends State<ConversorPage> {
       'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
   bool _isUpdatingText = false;
   DateTime? _usdtLastUpdatedAt;
+  final GlobalKey _captureKey = GlobalKey();
 
   List<ExchangeRates> rateOptions = [];
   List<String> _rateLabelsCache = const [];
@@ -804,6 +810,112 @@ class _ConversorPageState extends State<ConversorPage> {
     );
   }
 
+  Future<void> _compartirCapturaApp() async {
+    try {
+      // Espera al siguiente frame para asegurar que la zona a capturar
+      // este completamente pintada antes de generar la imagen.
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      await WidgetsBinding.instance.endOfFrame;
+
+      final renderObject = _captureKey.currentContext?.findRenderObject();
+      if (renderObject is! RenderRepaintBoundary) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo generar la captura.')),
+        );
+        return;
+      }
+
+      final boundary = renderObject;
+
+      if (boundary.debugNeedsPaint) {
+        await WidgetsBinding.instance.endOfFrame;
+      }
+
+      if (!mounted) return;
+
+      if (rates == null &&
+          _fromController.text.trim().isEmpty &&
+          _toController.text.trim().isEmpty &&
+          _calculatorEntries.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hay datos para compartir todavía.')),
+        );
+        return;
+      }
+
+      final deviceRatio = MediaQuery.of(context).devicePixelRatio;
+      final safePixelRatio = deviceRatio.clamp(1.0, 2.5);
+      final image = await boundary.toImage(pixelRatio: safePixelRatio);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo convertir la captura.')),
+        );
+        return;
+      }
+
+      final bytes = byteData.buffer.asUint8List();
+      final tempDir = await getTemporaryDirectory();
+      final fileName =
+          'rapidobcv_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(bytes, flush: true);
+
+        final montoUsdConversor = _fromController.text.trim();
+        final montoVesConversor = _toController.text.trim();
+        final montoUsdInput = _calculatorUsdController.text.trim();
+        final montoVesInput = _calculatorVesController.text.trim();
+
+        final usdDesdeInput = _parseMonto(montoUsdInput, isVes: false);
+        final vesDesdeInput = _parseMonto(montoVesInput, isVes: true);
+
+          final montoUsdParaCompartir =
+            (fromCurrency == 'USD' && montoUsdConversor.isNotEmpty)
+              ? montoUsdConversor
+              : (montoUsdInput.isNotEmpty
+                ? montoUsdInput
+                : (_calculatorEntries.isNotEmpty
+                    ? _calculatorTotalUsd.toStringAsFixed(2)
+                    : '-'));
+
+        String montoVesParaCompartir;
+        if (montoVesConversor.isNotEmpty) {
+          montoVesParaCompartir = montoVesConversor;
+        } else if (usdDesdeInput != null && rates != null) {
+          montoVesParaCompartir =
+              _formatearMontoVes(_convertirMonto(usdDesdeInput, 'USD', 'VES'));
+        } else if (_calculatorEntries.isNotEmpty) {
+          montoVesParaCompartir = _formatearMontoVes(_calculatorTotalVes);
+        } else if (vesDesdeInput != null) {
+          montoVesParaCompartir = _formatearMontoVes(vesDesdeInput);
+        } else {
+          montoVesParaCompartir = '-';
+        }
+
+      final shareText =
+            'Monto en USD: $montoUsdParaCompartir\n'
+            'Monto en VES: $montoVesParaCompartir';
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: <XFile>[XFile(file.path, mimeType: 'image/png')],
+          text: shareText,
+          subject: 'RápidoBCV',
+        ),
+      );
+
+      image.dispose();
+    } on Exception {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo compartir la captura.')),
+      );
+    }
+  }
+
   String _formatearFechaAdquisicion(DateTime dateTime) {
     final day = dateTime.day.toString().padLeft(2, '0');
     final month = dateTime.month.toString().padLeft(2, '0');
@@ -920,31 +1032,43 @@ class _ConversorPageState extends State<ConversorPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _RatesPanel(
-              isLoading: isLoading,
-              error: error,
-              rates: rates,
-              selectedCurrency: fromCurrency,
-              selectedRateIndex: selectedRateIndex,
-              rateLabels: _rateLabelsCache,
-              onRetry: () => obtenerTasasActuales(),
-              onSelectCurrency: _seleccionarMonedaDesdeTasa,
-              onSelectRateIndex: _seleccionarRegistroTasa,
-              acquisitionText: _acquisitionTextCache,
-            ),
-            const SizedBox(height: 30),
-            _ConverterPanel(
-              fromController: _fromController,
-              toController: _toController,
-              fromCurrency: fromCurrency,
-              fromCurrencyIcon: _iconoMoneda(fromCurrency),
-              onClear: limpiarMontos,
-              onFromChanged: () => _actualizarCampoDestino(desdeArriba: true),
-              onToChanged: () => _actualizarCampoDestino(desdeArriba: false),
-              onCopyFrom: () =>
-                  _copiarMontoAlPortapapeles(_fromController, fromCurrency),
-              onCopyTo: () => _copiarMontoAlPortapapeles(_toController, 'VES'),
-              onRefreshRates: () => obtenerTasasActuales(),
+            RepaintBoundary(
+              key: _captureKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _RatesPanel(
+                    isLoading: isLoading,
+                    error: error,
+                    rates: rates,
+                    selectedCurrency: fromCurrency,
+                    selectedRateIndex: selectedRateIndex,
+                    rateLabels: _rateLabelsCache,
+                    onRetry: () => obtenerTasasActuales(),
+                    onSelectCurrency: _seleccionarMonedaDesdeTasa,
+                    onSelectRateIndex: _seleccionarRegistroTasa,
+                    acquisitionText: _acquisitionTextCache,
+                  ),
+                  const SizedBox(height: 30),
+                  _ConverterPanel(
+                    fromController: _fromController,
+                    toController: _toController,
+                    fromCurrency: fromCurrency,
+                    fromCurrencyIcon: _iconoMoneda(fromCurrency),
+                    onClear: limpiarMontos,
+                    onFromChanged: () =>
+                        _actualizarCampoDestino(desdeArriba: true),
+                    onToChanged: () =>
+                        _actualizarCampoDestino(desdeArriba: false),
+                    onCopyFrom: () =>
+                        _copiarMontoAlPortapapeles(_fromController, fromCurrency),
+                    onCopyTo: () =>
+                        _copiarMontoAlPortapapeles(_toController, 'VES'),
+                    onRefreshRates: () => obtenerTasasActuales(),
+                    onShareCapture: _compartirCapturaApp,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
             _UsdCalculatorPanel(
@@ -1181,6 +1305,7 @@ class _ConverterPanel extends StatelessWidget {
     required this.onCopyFrom,
     required this.onCopyTo,
     required this.onRefreshRates,
+    required this.onShareCapture,
   });
 
   final TextEditingController fromController;
@@ -1193,6 +1318,7 @@ class _ConverterPanel extends StatelessWidget {
   final VoidCallback onCopyFrom;
   final VoidCallback onCopyTo;
   final VoidCallback onRefreshRates;
+  final VoidCallback onShareCapture;
 
   @override
   Widget build(BuildContext context) {
@@ -1262,16 +1388,30 @@ class _ConverterPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 30),
-        Align(
-          alignment: Alignment.center,
-          child: ElevatedButton.icon(
-            onPressed: onRefreshRates,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Actualizar Tasas'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.all(16),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: onRefreshRates,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Actualizar Tasas'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: onShareCapture,
+                icon: const Icon(Icons.share),
+                label: const Text('Compartir'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
