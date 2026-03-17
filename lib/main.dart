@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/rendering.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:screenshot/screenshot.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' as ui;
 
 void main() {
   runApp(const MyApp());
@@ -115,7 +114,7 @@ class _ConversorPageState extends State<ConversorPage> {
       'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
   bool _isUpdatingText = false;
   DateTime? _usdtLastUpdatedAt;
-  final GlobalKey _captureKey = GlobalKey();
+  final ScreenshotController _screenshotController = ScreenshotController();
 
   List<ExchangeRates> rateOptions = [];
   List<String> _rateLabelsCache = const [];
@@ -811,94 +810,40 @@ class _ConversorPageState extends State<ConversorPage> {
   }
 
   Future<void> _compartirCapturaApp() async {
-    final montoUsdConversor = _fromController.text.trim();
-    final montoVesConversor = _toController.text.trim();
-    final montoUsdInput = _calculatorUsdController.text.trim();
-    final montoVesInput = _calculatorVesController.text.trim();
-
-    final usdDesdeInput = _parseMonto(montoUsdInput, isVes: false);
-    final vesDesdeInput = _parseMonto(montoVesInput, isVes: true);
-
-    final montoUsdParaCompartir =
-        (fromCurrency == 'USD' && montoUsdConversor.isNotEmpty)
-            ? montoUsdConversor
-            : (montoUsdInput.isNotEmpty
-                ? montoUsdInput
-                : (_calculatorEntries.isNotEmpty
-                    ? _calculatorTotalUsd.toStringAsFixed(2)
-                    : '-'));
-
-    String montoVesParaCompartir;
-    if (montoVesConversor.isNotEmpty) {
-      montoVesParaCompartir = montoVesConversor;
-    } else if (usdDesdeInput != null && rates != null) {
-      montoVesParaCompartir =
-          _formatearMontoVes(_convertirMonto(usdDesdeInput, 'USD', 'VES'));
-    } else if (_calculatorEntries.isNotEmpty) {
-      montoVesParaCompartir = _formatearMontoVes(_calculatorTotalVes);
-    } else if (vesDesdeInput != null) {
-      montoVesParaCompartir = _formatearMontoVes(vesDesdeInput);
-    } else {
-      montoVesParaCompartir = '-';
-    }
+    final montoOrigen = _fromController.text.trim();
+    final montoVes = _toController.text.trim();
 
     final shareText =
-        'Monto en USD: $montoUsdParaCompartir\n'
-        'Monto en VES: $montoVesParaCompartir';
+        'Monto en $fromCurrency: ${montoOrigen.isEmpty ? '-' : montoOrigen}\n'
+        'Monto en VES: ${montoVes.isEmpty ? '-' : montoVes}';
 
-    XFile? sharedImage;
     try {
-      // Espera al siguiente frame para asegurar que la zona a capturar
-      // este completamente pintada antes de generar la imagen.
-      await Future<void>.delayed(const Duration(milliseconds: 16));
-      await WidgetsBinding.instance.endOfFrame;
-
-      final renderObject = _captureKey.currentContext?.findRenderObject();
-      if (renderObject is RenderRepaintBoundary) {
-        if (renderObject.debugNeedsPaint) {
-          await WidgetsBinding.instance.endOfFrame;
-        }
-
-        if (!mounted) return;
-
-        final image = await renderObject.toImage(pixelRatio: 1.0);
-        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-        image.dispose();
-
-        if (byteData != null) {
-          final bytes = byteData.buffer.asUint8List();
-          final tempDir = await getTemporaryDirectory();
-          final fileName =
-              'rapidobcv_${DateTime.now().millisecondsSinceEpoch}.png';
-          final file = File('${tempDir.path}/$fileName');
-          await file.writeAsBytes(bytes, flush: true);
-          sharedImage = XFile(file.path, mimeType: 'image/png');
-        }
-      }
-    } catch (e, st) {
-      debugPrint('Error al capturar imagen para compartir: $e');
-      debugPrint('$st');
-    }
-
-    if (sharedImage == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo generar la captura.')),
+      final bytes = await _screenshotController.capture(
+        pixelRatio: 1.0,
+        delay: const Duration(milliseconds: 80),
       );
-      return;
-    }
 
-    try {
+      if (bytes == null || bytes.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo generar la captura.')),
+        );
+        return;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final fileName = 'rapidobcv_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(bytes, flush: true);
+
       await SharePlus.instance.share(
         ShareParams(
-          files: <XFile>[sharedImage],
+          files: <XFile>[XFile(file.path, mimeType: 'image/png')],
           text: shareText,
           subject: 'RápidoBCV',
         ),
       );
-    } catch (e, st) {
-      debugPrint('Error al compartir: $e');
-      debugPrint('$st');
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo compartir: ${e.runtimeType}')),
@@ -1022,8 +967,8 @@ class _ConversorPageState extends State<ConversorPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            RepaintBoundary(
-              key: _captureKey,
+            Screenshot(
+              controller: _screenshotController,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
