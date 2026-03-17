@@ -861,9 +861,7 @@ class _ConversorPageState extends State<ConversorPage> {
 
         if (!mounted) return;
 
-        final deviceRatio = MediaQuery.of(context).devicePixelRatio;
-        final safePixelRatio = deviceRatio.clamp(1.0, 2.0);
-        final image = await renderObject.toImage(pixelRatio: safePixelRatio);
+        final image = await renderObject.toImage(pixelRatio: 1.0);
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
         image.dispose();
 
@@ -882,10 +880,18 @@ class _ConversorPageState extends State<ConversorPage> {
       debugPrint('$st');
     }
 
+    if (sharedImage == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo generar la captura.')),
+      );
+      return;
+    }
+
     try {
       await SharePlus.instance.share(
         ShareParams(
-          files: sharedImage == null ? const <XFile>[] : <XFile>[sharedImage],
+          files: <XFile>[sharedImage],
           text: shareText,
           subject: 'RápidoBCV',
         ),
