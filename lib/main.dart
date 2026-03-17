@@ -811,6 +811,42 @@ class _ConversorPageState extends State<ConversorPage> {
   }
 
   Future<void> _compartirCapturaApp() async {
+    final montoUsdConversor = _fromController.text.trim();
+    final montoVesConversor = _toController.text.trim();
+    final montoUsdInput = _calculatorUsdController.text.trim();
+    final montoVesInput = _calculatorVesController.text.trim();
+
+    final usdDesdeInput = _parseMonto(montoUsdInput, isVes: false);
+    final vesDesdeInput = _parseMonto(montoVesInput, isVes: true);
+
+    final montoUsdParaCompartir =
+        (fromCurrency == 'USD' && montoUsdConversor.isNotEmpty)
+            ? montoUsdConversor
+            : (montoUsdInput.isNotEmpty
+                ? montoUsdInput
+                : (_calculatorEntries.isNotEmpty
+                    ? _calculatorTotalUsd.toStringAsFixed(2)
+                    : '-'));
+
+    String montoVesParaCompartir;
+    if (montoVesConversor.isNotEmpty) {
+      montoVesParaCompartir = montoVesConversor;
+    } else if (usdDesdeInput != null && rates != null) {
+      montoVesParaCompartir =
+          _formatearMontoVes(_convertirMonto(usdDesdeInput, 'USD', 'VES'));
+    } else if (_calculatorEntries.isNotEmpty) {
+      montoVesParaCompartir = _formatearMontoVes(_calculatorTotalVes);
+    } else if (vesDesdeInput != null) {
+      montoVesParaCompartir = _formatearMontoVes(vesDesdeInput);
+    } else {
+      montoVesParaCompartir = '-';
+    }
+
+    final shareText =
+        'Monto en USD: $montoUsdParaCompartir\n'
+        'Monto en VES: $montoVesParaCompartir';
+
+    XFile? sharedImage;
     try {
       // Espera al siguiente frame para asegurar que la zona a capturar
       // este completamente pintada antes de generar la imagen.
@@ -818,100 +854,48 @@ class _ConversorPageState extends State<ConversorPage> {
       await WidgetsBinding.instance.endOfFrame;
 
       final renderObject = _captureKey.currentContext?.findRenderObject();
-      if (renderObject is! RenderRepaintBoundary) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo generar la captura.')),
-        );
-        return;
-      }
-
-      final boundary = renderObject;
-
-      if (boundary.debugNeedsPaint) {
-        await WidgetsBinding.instance.endOfFrame;
-      }
-
-      if (!mounted) return;
-
-      if (rates == null &&
-          _fromController.text.trim().isEmpty &&
-          _toController.text.trim().isEmpty &&
-          _calculatorEntries.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No hay datos para compartir todavía.')),
-        );
-        return;
-      }
-
-      final deviceRatio = MediaQuery.of(context).devicePixelRatio;
-      final safePixelRatio = deviceRatio.clamp(1.0, 2.5);
-      final image = await boundary.toImage(pixelRatio: safePixelRatio);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-
-      if (byteData == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo convertir la captura.')),
-        );
-        return;
-      }
-
-      final bytes = byteData.buffer.asUint8List();
-      final tempDir = await getTemporaryDirectory();
-      final fileName =
-          'rapidobcv_${DateTime.now().millisecondsSinceEpoch}.png';
-      final file = File('${tempDir.path}/$fileName');
-      await file.writeAsBytes(bytes, flush: true);
-
-        final montoUsdConversor = _fromController.text.trim();
-        final montoVesConversor = _toController.text.trim();
-        final montoUsdInput = _calculatorUsdController.text.trim();
-        final montoVesInput = _calculatorVesController.text.trim();
-
-        final usdDesdeInput = _parseMonto(montoUsdInput, isVes: false);
-        final vesDesdeInput = _parseMonto(montoVesInput, isVes: true);
-
-          final montoUsdParaCompartir =
-            (fromCurrency == 'USD' && montoUsdConversor.isNotEmpty)
-              ? montoUsdConversor
-              : (montoUsdInput.isNotEmpty
-                ? montoUsdInput
-                : (_calculatorEntries.isNotEmpty
-                    ? _calculatorTotalUsd.toStringAsFixed(2)
-                    : '-'));
-
-        String montoVesParaCompartir;
-        if (montoVesConversor.isNotEmpty) {
-          montoVesParaCompartir = montoVesConversor;
-        } else if (usdDesdeInput != null && rates != null) {
-          montoVesParaCompartir =
-              _formatearMontoVes(_convertirMonto(usdDesdeInput, 'USD', 'VES'));
-        } else if (_calculatorEntries.isNotEmpty) {
-          montoVesParaCompartir = _formatearMontoVes(_calculatorTotalVes);
-        } else if (vesDesdeInput != null) {
-          montoVesParaCompartir = _formatearMontoVes(vesDesdeInput);
-        } else {
-          montoVesParaCompartir = '-';
+      if (renderObject is RenderRepaintBoundary) {
+        if (renderObject.debugNeedsPaint) {
+          await WidgetsBinding.instance.endOfFrame;
         }
 
-      final shareText =
-            'Monto en USD: $montoUsdParaCompartir\n'
-            'Monto en VES: $montoVesParaCompartir';
+        if (!mounted) return;
 
+        final deviceRatio = MediaQuery.of(context).devicePixelRatio;
+        final safePixelRatio = deviceRatio.clamp(1.0, 2.0);
+        final image = await renderObject.toImage(pixelRatio: safePixelRatio);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        image.dispose();
+
+        if (byteData != null) {
+          final bytes = byteData.buffer.asUint8List();
+          final tempDir = await getTemporaryDirectory();
+          final fileName =
+              'rapidobcv_${DateTime.now().millisecondsSinceEpoch}.png';
+          final file = File('${tempDir.path}/$fileName');
+          await file.writeAsBytes(bytes, flush: true);
+          sharedImage = XFile(file.path, mimeType: 'image/png');
+        }
+      }
+    } catch (e, st) {
+      debugPrint('Error al capturar imagen para compartir: $e');
+      debugPrint('$st');
+    }
+
+    try {
       await SharePlus.instance.share(
         ShareParams(
-          files: <XFile>[XFile(file.path, mimeType: 'image/png')],
+          files: sharedImage == null ? const <XFile>[] : <XFile>[sharedImage],
           text: shareText,
           subject: 'RápidoBCV',
         ),
       );
-
-      image.dispose();
-    } on Exception {
+    } catch (e, st) {
+      debugPrint('Error al compartir: $e');
+      debugPrint('$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo compartir la captura.')),
+        SnackBar(content: Text('No se pudo compartir: ${e.runtimeType}')),
       );
     }
   }
