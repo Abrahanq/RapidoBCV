@@ -812,6 +812,9 @@ class _ConversorPageState extends State<ConversorPage> {
   Future<void> _compartirCapturaApp() async {
     final montoOrigen = _fromController.text.trim();
     final montoVes = _toController.text.trim();
+    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final capturePixelRatio =
+        (devicePixelRatio * 2).clamp(2.0, 4.0).toDouble();
 
     final shareText =
         'Monto en $fromCurrency: ${montoOrigen.isEmpty ? '-' : montoOrigen}\n'
@@ -819,7 +822,7 @@ class _ConversorPageState extends State<ConversorPage> {
 
     try {
       final bytes = await _screenshotController.capture(
-        pixelRatio: 1.0,
+        pixelRatio: capturePixelRatio,
         delay: const Duration(milliseconds: 80),
       );
 
