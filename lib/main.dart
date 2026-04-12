@@ -94,6 +94,25 @@ class ExchangeRates {
   });
 }
 
+class UsdtBinanceQuote {
+  final double buyToVes;
+  final double sellToVes;
+  final DateTime updatedAt;
+
+  const UsdtBinanceQuote({
+    required this.buyToVes,
+    required this.sellToVes,
+    required this.updatedAt,
+  });
+
+  double get averageToVes => (buyToVes + sellToVes) / 2;
+}
+
+enum UsdtRateMode {
+  buyAverage,
+  sellAverage,
+}
+
 class ConversorPage extends StatefulWidget {
   final ValueChanged<bool> onToggleTheme;
 
@@ -109,11 +128,21 @@ class ConversorPage extends StatefulWidget {
 class _ConversorPageState extends State<ConversorPage> {
   static const String _ratesCacheKey = 'exchange_rates_cache';
   static const String _usdtRateCacheKey = 'usdt_rate_cache';
+  static const String _usdtBuyRateCacheKey = 'usdt_buy_rate_cache';
+  static const String _usdtSellRateCacheKey = 'usdt_sell_rate_cache';
   static const String _usdtRateUpdatedAtCacheKey = 'usdt_rate_updated_at_cache';
+  static const String _usdtQuoteCacheVersionKey = 'usdt_quote_cache_version';
+  static const int _usdtQuoteCacheVersion = 2;
   static const String _binanceP2pEndpoint =
       'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
   bool _isUpdatingText = false;
   DateTime? _usdtLastUpdatedAt;
+  DateTime? _usdtQuoteUpdatedAt;
+  double? _usdtBuyRate;
+  double? _usdtSellRate;
+  UsdtRateMode _usdtRateMode = UsdtRateMode.buyAverage;
+  String? _usdtQuoteError;
+  bool _isLoadingUsdtQuote = false;
   final ScreenshotController _screenshotController = ScreenshotController();
 
   List<ExchangeRates> rateOptions = [];
@@ -266,39 +295,105 @@ class _ConversorPageState extends State<ConversorPage> {
   }
 
   Future<double> _obtenerUsdtConCacheHorario(double fallbackUsd) async {
+    final quote = await _obtenerCotizacionUsdtConCacheHorario(fallbackUsd);
+    _actualizarCotizacionUsdtEnMemoria(quote);
+    return quote.averageToVes;
+  }
+
+  void _actualizarCotizacionUsdtEnMemoria(UsdtBinanceQuote quote) {
+    _usdtBuyRate = quote.buyToVes;
+    _usdtSellRate = quote.sellToVes;
+    _usdtQuoteUpdatedAt = quote.updatedAt;
+    _usdtLastUpdatedAt = quote.updatedAt;
+  }
+
+  Future<UsdtBinanceQuote> _obtenerCotizacionUsdtConCacheHorario(
+    double fallbackRate,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final cachedUsdt = prefs.getDouble(_usdtRateCacheKey);
+    final cachedBuy = prefs.getDouble(_usdtBuyRateCacheKey);
+    final cachedSell = prefs.getDouble(_usdtSellRateCacheKey);
+    final cachedVersion = prefs.getInt(_usdtQuoteCacheVersionKey) ?? 1;
     final cachedUpdatedAt = prefs.getString(_usdtRateUpdatedAtCacheKey);
 
-    if (cachedUsdt != null && cachedUpdatedAt != null) {
+    if (cachedBuy != null && cachedSell != null && cachedUpdatedAt != null) {
       try {
         final updatedAt = DateTime.parse(cachedUpdatedAt);
         final age = DateTime.now().difference(updatedAt);
         if (age < const Duration(hours: 1)) {
-          _usdtLastUpdatedAt = updatedAt;
-          return cachedUsdt;
+          final buyValue =
+              cachedVersion >= _usdtQuoteCacheVersion ? cachedBuy : cachedSell;
+          final sellValue =
+              cachedVersion >= _usdtQuoteCacheVersion ? cachedSell : cachedBuy;
+          return UsdtBinanceQuote(
+            buyToVes: buyValue,
+            sellToVes: sellValue,
+            updatedAt: updatedAt,
+          );
         }
       } catch (_) {}
     }
 
     try {
-      final freshUsdt = await _obtenerPromedioUsdtBinance();
+      final freshQuote = await _obtenerCotizacionUsdtBinance();
       final now = DateTime.now();
-      await prefs.setDouble(_usdtRateCacheKey, freshUsdt);
+      await prefs.setDouble(_usdtRateCacheKey, freshQuote.averageToVes);
+      await prefs.setDouble(_usdtBuyRateCacheKey, freshQuote.buyToVes);
+      await prefs.setDouble(_usdtSellRateCacheKey, freshQuote.sellToVes);
+      await prefs.setInt(_usdtQuoteCacheVersionKey, _usdtQuoteCacheVersion);
       await prefs.setString(
         _usdtRateUpdatedAtCacheKey,
         now.toIso8601String(),
       );
-      _usdtLastUpdatedAt = now;
-      return freshUsdt;
+      return UsdtBinanceQuote(
+        buyToVes: freshQuote.buyToVes,
+        sellToVes: freshQuote.sellToVes,
+        updatedAt: now,
+      );
     } catch (_) {
       if (cachedUpdatedAt != null) {
         try {
-          _usdtLastUpdatedAt = DateTime.parse(cachedUpdatedAt);
+          final updatedAt = DateTime.parse(cachedUpdatedAt);
+          if (cachedBuy != null && cachedSell != null) {
+            final buyValue =
+                cachedVersion >= _usdtQuoteCacheVersion ? cachedBuy : cachedSell;
+            final sellValue =
+                cachedVersion >= _usdtQuoteCacheVersion ? cachedSell : cachedBuy;
+            return UsdtBinanceQuote(
+              buyToVes: buyValue,
+              sellToVes: sellValue,
+              updatedAt: updatedAt,
+            );
+          }
+          if (cachedUsdt != null) {
+            return UsdtBinanceQuote(
+              buyToVes: cachedUsdt,
+              sellToVes: cachedUsdt,
+              updatedAt: updatedAt,
+            );
+          }
         } catch (_) {}
       }
-      return cachedUsdt ?? fallbackUsd;
+      return UsdtBinanceQuote(
+        buyToVes: cachedUsdt ?? fallbackRate,
+        sellToVes: cachedUsdt ?? fallbackRate,
+        updatedAt: DateTime.now(),
+      );
     }
+  }
+
+  Future<UsdtBinanceQuote> _obtenerCotizacionUsdtBinance() async {
+    final prices = await Future.wait<double>([
+      _obtenerPromedioUsdtBinancePorTipo('SELL'),
+      _obtenerPromedioUsdtBinancePorTipo('BUY'),
+    ]);
+
+    return UsdtBinanceQuote(
+      buyToVes: prices[0],
+      sellToVes: prices[1],
+      updatedAt: DateTime.now(),
+    );
   }
 
   int _obtenerIndiceInicial(List<ExchangeRates> options) {
@@ -353,7 +448,7 @@ class _ConversorPageState extends State<ConversorPage> {
     return options.last;
   }
 
-  Future<double> _obtenerPrecioUsdtBinancePorTipo(String tradeType) async {
+  Future<double> _obtenerPromedioUsdtBinancePorTipo(String tradeType) async {
     final uri =
         kIsWeb
             ? Uri.parse('https://corsproxy.io/?$_binanceP2pEndpoint')
@@ -368,7 +463,7 @@ class _ConversorPageState extends State<ConversorPage> {
           },
           body: jsonEncode({
             'page': 1,
-            'rows': 1,
+            'rows': 20,
             'payTypes': <String>[],
             'asset': 'USDT',
             'tradeType': tradeType,
@@ -394,28 +489,57 @@ class _ConversorPageState extends State<ConversorPage> {
       throw const FormatException('Binance P2P sin datos para USDT/VES');
     }
 
-    final Map<String, dynamic> adv =
-        (rows.first as Map<String, dynamic>)['adv'] as Map<String, dynamic>;
-    final priceRaw = adv['price'];
-    if (priceRaw == null) {
-      throw const FormatException('Binance P2P sin precio en la oferta');
+    final prices = <double>[];
+    for (final row in rows) {
+      if (row is! Map<String, dynamic>) continue;
+      final advDynamic = row['adv'];
+      if (advDynamic is! Map<String, dynamic>) continue;
+      final price = _toDoubleOrNull(advDynamic['price']);
+      if (price != null && price > 0) {
+        prices.add(price);
+      }
     }
 
-    final price = _toDoubleOrNull(priceRaw);
-    if (price == null) {
-      throw const FormatException('Precio inválido en Binance P2P');
+    if (prices.isEmpty) {
+      throw const FormatException('Binance P2P sin precios válidos');
     }
 
-    return price;
+    final total = prices.fold<double>(0, (sum, price) => sum + price);
+    return total / prices.length;
   }
 
-  Future<double> _obtenerPromedioUsdtBinance() async {
-    final prices = await Future.wait<double>([
-      _obtenerPrecioUsdtBinancePorTipo('BUY'),
-      _obtenerPrecioUsdtBinancePorTipo('SELL'),
-    ]);
+  Future<void> _cargarCotizacionUsdtParaVista({
+    bool forceRefresh = false,
+  }) async {
+    if (_isLoadingUsdtQuote) return;
+    if (!forceRefresh && _usdtBuyRate != null && _usdtSellRate != null) return;
 
-    return (prices[0] + prices[1]) / 2;
+    final fallbackRate = rates?.usdtToVes ?? rates?.usdToVes ?? 0;
+
+    setState(() {
+      _isLoadingUsdtQuote = true;
+      _usdtQuoteError = null;
+    });
+
+    try {
+      final quote = forceRefresh
+          ? await _obtenerCotizacionUsdtBinance()
+          : await _obtenerCotizacionUsdtConCacheHorario(fallbackRate);
+
+      if (!mounted) return;
+      setState(() {
+        _actualizarCotizacionUsdtEnMemoria(quote);
+        _isLoadingUsdtQuote = false;
+        _usdtQuoteError = null;
+      });
+      _recalcularConversionActual();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingUsdtQuote = false;
+        _usdtQuoteError = 'No se pudo actualizar compra/venta de Binance.';
+      });
+    }
   }
 
   Future<void> _guardarTasasEnCache(ExchangeRates exchangeRates) async {
@@ -544,8 +668,26 @@ class _ConversorPageState extends State<ConversorPage> {
     if (currency == 'VES') return 1;
     if (currency == 'USD') return rates!.usdToVes;
     if (currency == 'EUR') return rates!.eurToVes;
-    if (currency == 'USDT') return rates!.usdtToVes;
+    if (currency == 'USDT') {
+      if (_usdtBuyRate != null && _usdtSellRate != null) {
+        switch (_usdtRateMode) {
+          case UsdtRateMode.buyAverage:
+            return _usdtBuyRate!;
+          case UsdtRateMode.sellAverage:
+            return _usdtSellRate!;
+        }
+      }
+      return rates!.usdtToVes;
+    }
     return 1;
+  }
+
+  void _cambiarModoTasaUsdt(UsdtRateMode mode) {
+    if (_usdtRateMode == mode) return;
+    setState(() {
+      _usdtRateMode = mode;
+    });
+    _recalcularConversionActual();
   }
 
   double? _parseMonto(String input, {required bool isVes}) {
@@ -657,6 +799,11 @@ class _ConversorPageState extends State<ConversorPage> {
     setState(() {
       fromCurrency = currency;
     });
+
+    if (currency == 'USDT') {
+      unawaited(_cargarCotizacionUsdtParaVista());
+    }
+
     _recalcularConversionActual();
   }
 
@@ -986,6 +1133,15 @@ class _ConversorPageState extends State<ConversorPage> {
                     onSelectCurrency: _seleccionarMonedaDesdeTasa,
                     onSelectRateIndex: _seleccionarRegistroTasa,
                     acquisitionText: _acquisitionTextCache,
+                    usdtBuyRate: _usdtBuyRate,
+                    usdtSellRate: _usdtSellRate,
+                    usdtQuoteUpdatedAt: _usdtQuoteUpdatedAt,
+                    isLoadingUsdtQuote: _isLoadingUsdtQuote,
+                    usdtQuoteError: _usdtQuoteError,
+                    selectedUsdtRateMode: _usdtRateMode,
+                    onRefreshUsdtQuote: () =>
+                        _cargarCotizacionUsdtParaVista(forceRefresh: true),
+                    onSelectUsdtRateMode: _cambiarModoTasaUsdt,
                   ),
                   const SizedBox(height: 30),
                   _ConverterPanel(
@@ -1051,6 +1207,14 @@ class _RatesPanel extends StatelessWidget {
     required this.onSelectCurrency,
     required this.onSelectRateIndex,
     required this.acquisitionText,
+    required this.usdtBuyRate,
+    required this.usdtSellRate,
+    required this.usdtQuoteUpdatedAt,
+    required this.isLoadingUsdtQuote,
+    required this.usdtQuoteError,
+    required this.selectedUsdtRateMode,
+    required this.onRefreshUsdtQuote,
+    required this.onSelectUsdtRateMode,
   });
 
   final bool isLoading;
@@ -1063,9 +1227,23 @@ class _RatesPanel extends StatelessWidget {
   final ValueChanged<String> onSelectCurrency;
   final ValueChanged<int> onSelectRateIndex;
   final String? acquisitionText;
+  final double? usdtBuyRate;
+  final double? usdtSellRate;
+  final DateTime? usdtQuoteUpdatedAt;
+  final bool isLoadingUsdtQuote;
+  final String? usdtQuoteError;
+  final UsdtRateMode selectedUsdtRateMode;
+  final VoidCallback onRefreshUsdtQuote;
+  final ValueChanged<UsdtRateMode> onSelectUsdtRateMode;
 
   @override
   Widget build(BuildContext context) {
+    final selectedUsdtRate = usdtBuyRate != null && usdtSellRate != null
+      ? (selectedUsdtRateMode == UsdtRateMode.buyAverage
+        ? usdtBuyRate!
+        : usdtSellRate!)
+      : rates?.usdtToVes;
+
     return Card(
       elevation: 3,
       child: Padding(
@@ -1120,7 +1298,8 @@ class _RatesPanel extends StatelessWidget {
                       const SizedBox(width: 10),
                       _RateTile(
                         currency: 'USDT',
-                        rate: rates!.usdtToVes.toStringAsFixed(2),
+                        rate: (selectedUsdtRate ?? rates!.usdtToVes)
+                            .toStringAsFixed(2),
                         isSelected: selectedCurrency == 'USDT',
                         onTap: () => onSelectCurrency('USDT'),
                       ),
@@ -1134,7 +1313,27 @@ class _RatesPanel extends StatelessWidget {
                       color: Colors.grey[600],
                     ),
                   ),
-                  if (rateLabels.length > 1) ...[
+                  if (selectedCurrency == 'USDT') ...[
+                    const SizedBox(height: 12),
+                    SegmentedButton<UsdtRateMode>(
+                      segments: const <ButtonSegment<UsdtRateMode>>[
+                        ButtonSegment<UsdtRateMode>(
+                          value: UsdtRateMode.buyAverage,
+                          label: Text('Compra'),
+                        ),
+                        ButtonSegment<UsdtRateMode>(
+                          value: UsdtRateMode.sellAverage,
+                          label: Text('Venta'),
+                        ),
+                      ],
+                      selected: <UsdtRateMode>{selectedUsdtRateMode},
+                      onSelectionChanged: (Set<UsdtRateMode> selection) {
+                        if (selection.isNotEmpty) {
+                          onSelectUsdtRateMode(selection.first);
+                        }
+                      },
+                    ),
+                  ] else if (rateLabels.length > 1) ...[
                     const SizedBox(height: 12),
                     SegmentedButton<int>(
                       segments: List<ButtonSegment<int>>.generate(
