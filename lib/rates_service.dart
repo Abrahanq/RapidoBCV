@@ -50,6 +50,8 @@ class RatesService {
   static const _usdtQuoteCacheVersion = 2;
   static const _binanceP2pEndpoint =
       'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
+  static const _binanceJsonEndpoint =
+      'https://abrahanq.github.io/bcv-price/binance_price.json';
 
   static double? _n(dynamic v) {
     if (v == null) return null;
@@ -187,6 +189,7 @@ class RatesService {
   }
 
   Future<UsdtBinanceQuote> fetchUsdtFromBinance() async {
+    if (kIsWeb) return _fetchUsdtFromJson();
     final prices = await Future.wait([
       _fetchBinanceByType('SELL'),
       _fetchBinanceByType('BUY'),
@@ -195,10 +198,29 @@ class RatesService {
         buyToVes: prices[0], sellToVes: prices[1], updatedAt: DateTime.now());
   }
 
+  Future<UsdtBinanceQuote> _fetchUsdtFromJson() async {
+    final uri = Uri.parse(_binanceJsonEndpoint).replace(queryParameters: {
+      'v': DateTime.now().millisecondsSinceEpoch.toString(),
+    });
+    final response = await http
+        .get(uri, headers: {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+    final body =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final buy = _n(body['compra']);
+    final sell = _n(body['venta']);
+    if (buy == null || sell == null) {
+      throw const FormatException('Invalid binance_price.json');
+    }
+    return UsdtBinanceQuote(
+        buyToVes: buy, sellToVes: sell, updatedAt: DateTime.now());
+  }
+
   Future<double> _fetchBinanceByType(String tradeType) async {
-    final uri = kIsWeb
-        ? Uri.parse('https://corsproxy.io/?$_binanceP2pEndpoint')
-        : Uri.parse(_binanceP2pEndpoint);
+    final uri = Uri.parse(_binanceP2pEndpoint);
     final response = await http
         .post(uri,
             headers: {
