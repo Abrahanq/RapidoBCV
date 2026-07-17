@@ -1101,8 +1101,8 @@ class _TasaScreenState extends State<TasaScreen> {
         padding: const EdgeInsets.all(4),
         child: Row(
           children: [
-            _buildUsdtTab(c, UsdtRateMode.buyAverage, 'Compra', _usdtBuyRate!),
-            _buildUsdtTab(c, UsdtRateMode.sellAverage, 'Venta', _usdtSellRate!),
+            _buildUsdtTab(c, UsdtRateMode.buyAverage, 'Venta', _usdtBuyRate!),
+            _buildUsdtTab(c, UsdtRateMode.sellAverage, 'Compra', _usdtSellRate!),
           ],
         ),
       ),
