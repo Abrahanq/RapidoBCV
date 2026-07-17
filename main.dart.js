@@ -91702,10 +91702,10 @@ if(a3.db==="USDT"&&a3.x!=null&&a3.y!=null){a9=A.jk(a6.e,1)
 b2=A.cB(14)
 p=a3.x
 p.toString
-p=a3.Ne(a6,B.dr,"Compra",p)
+p=a3.Ne(a6,B.dr,"Venta",p)
 n=a3.y
 n.toString
-a8.push(new A.bo(B.oh,A.d1(a4,A.bT(A.b([p,a3.Ne(a6,B.Bk,"Venta",n)],o),B.y,B.p,B.u,0,a4),B.r,a4,a4,new A.bK(a6.x,a4,a9,b2,a4,a4,B.U),a4,a4,a4,a4,B.k4,a4,a4,a4),a4))}else if(J.c1(a3.as)>=2)a8.push(a3.a5H(a6))
+a8.push(new A.bo(B.oh,A.d1(a4,A.bT(A.b([p,a3.Ne(a6,B.Bk,"Compra",n)],o),B.y,B.p,B.u,0,a4),B.r,a4,a4,new A.bK(a6.x,a4,a9,b2,a4,a4,B.U),a4,a4,a4,a4,B.k4,a4,a4,a4),a4))}else if(J.c1(a3.as)>=2)a8.push(a3.a5H(a6))
 a8.push(a3.a5F(a6))
 a8.push(a3.a5B(a6))
 a8=A.b([A.Oc(!0,A.ayR(A.cv(A.b([new A.uN(A.yg(A.cv(a8,B.bv,B.p,B.u),a7,!0),a3.fx,a4),a3.a5D(a6,a5),a3.a5E(a6),B.SL],o),B.bv,B.p,B.u),a3.fy,a4),!0)],o)
