@@ -30,12 +30,12 @@ class _AccentPreset {
 }
 
 const List<_AccentPreset> _kPresets = [
-  _AccentPreset('Azul BCV',  Color(0xFF2F6FED), Color(0xFF1D4ED8)),
+  _AccentPreset('Azul BCV', Color(0xFF2F6FED), Color(0xFF1D4ED8)),
   _AccentPreset('Esmeralda', Color(0xFF10B981), Color(0xFF059669)),
-  _AccentPreset('Violeta',   Color(0xFF7C5CFF), Color(0xFF6320C9)),
-  _AccentPreset('Coral',     Color(0xFFF97316), Color(0xFFEA580C)),
-  _AccentPreset('Magenta',   Color(0xFFEC4899), Color(0xFFDB2777)),
-  _AccentPreset('Turquesa',  Color(0xFF06B6D4), Color(0xFF0891B2)),
+  _AccentPreset('Violeta', Color(0xFF7C5CFF), Color(0xFF6320C9)),
+  _AccentPreset('Coral', Color(0xFFF97316), Color(0xFFEA580C)),
+  _AccentPreset('Magenta', Color(0xFFEC4899), Color(0xFFDB2777)),
+  _AccentPreset('Turquesa', Color(0xFF06B6D4), Color(0xFF0891B2)),
 ];
 
 Color _darken(Color c, double f) => Color.fromARGB(
@@ -61,50 +61,89 @@ class _TC {
   final bool isDark;
 
   const _TC({
-    required this.screen, required this.text, required this.dim,
-    required this.card, required this.border, required this.toggleBg,
-    required this.ghostBorder, required this.ghostText,
-    required this.dateTrack, required this.dateActive,
-    required this.dateActiveText, this.dateActiveShadow,
-    required this.input, required this.inputText, required this.item,
-    required this.heroNum, this.cardShadow,
-    required this.up, required this.accent, required this.accentDeep,
-    required this.accentText, required this.isDark,
+    required this.screen,
+    required this.text,
+    required this.dim,
+    required this.card,
+    required this.border,
+    required this.toggleBg,
+    required this.ghostBorder,
+    required this.ghostText,
+    required this.dateTrack,
+    required this.dateActive,
+    required this.dateActiveText,
+    this.dateActiveShadow,
+    required this.input,
+    required this.inputText,
+    required this.item,
+    required this.heroNum,
+    this.cardShadow,
+    required this.up,
+    required this.accent,
+    required this.accentDeep,
+    required this.accentText,
+    required this.isDark,
   });
 }
 
 _TC _colors(bool isDark, Color accent, Color accentDeep) {
   if (isDark) {
     return _TC(
-      screen: const Color(0xFF0A0E12), text: const Color(0xFFEEF2F6),
-      dim: const Color(0xFF8A94A6), card: const Color(0xFF111820),
-      border: const Color(0xFF1B232C), toggleBg: const Color(0xFF141B22),
-      ghostBorder: const Color(0xFF26313D), ghostText: const Color(0xFFCDD6E0),
-      dateTrack: const Color(0xFF111820), dateActive: const Color(0xFF1C2530),
-      dateActiveText: Colors.white, dateActiveShadow: null,
-      input: const Color(0xFF0D141B), inputText: const Color(0xFFEEF2F6),
-      item: const Color(0xFF131B23), heroNum: Colors.white, cardShadow: null,
+      screen: const Color(0xFF0A0E12),
+      text: const Color(0xFFEEF2F6),
+      dim: const Color(0xFF8A94A6),
+      card: const Color(0xFF111820),
+      border: const Color(0xFF1B232C),
+      toggleBg: const Color(0xFF141B22),
+      ghostBorder: const Color(0xFF26313D),
+      ghostText: const Color(0xFFCDD6E0),
+      dateTrack: const Color(0xFF111820),
+      dateActive: const Color(0xFF1C2530),
+      dateActiveText: Colors.white,
+      dateActiveShadow: null,
+      input: const Color(0xFF0D141B),
+      inputText: const Color(0xFFEEF2F6),
+      item: const Color(0xFF131B23),
+      heroNum: Colors.white,
+      cardShadow: null,
       up: const Color(0xFF34D399),
-      accent: accent, accentDeep: accentDeep, accentText: accent,
+      accent: accent,
+      accentDeep: accentDeep,
+      accentText: accent,
       isDark: true,
     );
   }
   return _TC(
-    screen: const Color(0xFFF4F7F9), text: const Color(0xFF0F1720),
-    dim: const Color(0xFF7C8698), card: Colors.white,
-    border: const Color(0xFFE6EBEF), toggleBg: const Color(0xFFE9EDF1),
-    ghostBorder: const Color(0xFFD5DCE3), ghostText: const Color(0xFF3A4553),
-    dateTrack: const Color(0xFFE9EDF1), dateActive: Colors.white,
+    screen: const Color(0xFFF4F7F9),
+    text: const Color(0xFF0F1720),
+    dim: const Color(0xFF7C8698),
+    card: Colors.white,
+    border: const Color(0xFFE6EBEF),
+    toggleBg: const Color(0xFFE9EDF1),
+    ghostBorder: const Color(0xFFD5DCE3),
+    ghostText: const Color(0xFF3A4553),
+    dateTrack: const Color(0xFFE9EDF1),
+    dateActive: Colors.white,
     dateActiveText: const Color(0xFF0F1720),
     dateActiveShadow: const BoxShadow(
-      color: Color(0x14000000), blurRadius: 6, offset: Offset(0, 2)),
-    input: const Color(0xFFF4F7F9), inputText: const Color(0xFF0F1720),
-    item: const Color(0xFFF6F8FA), heroNum: const Color(0xFF0F1720),
+      color: Color(0x14000000),
+      blurRadius: 6,
+      offset: Offset(0, 2),
+    ),
+    input: const Color(0xFFF4F7F9),
+    inputText: const Color(0xFF0F1720),
+    item: const Color(0xFFF6F8FA),
+    heroNum: const Color(0xFF0F1720),
     cardShadow: const BoxShadow(
-      color: Color(0x47142830), blurRadius: 34, spreadRadius: -22,
-      offset: Offset(0, 14)),
+      color: Color(0x47142830),
+      blurRadius: 34,
+      spreadRadius: -22,
+      offset: Offset(0, 14),
+    ),
     up: const Color(0xFF059669),
-    accent: accent, accentDeep: accentDeep, accentText: accentDeep,
+    accent: accent,
+    accentDeep: accentDeep,
+    accentText: accentDeep,
     isDark: false,
   );
 }
@@ -127,7 +166,11 @@ class _CalcItem {
 class TasaScreen extends StatefulWidget {
   final ValueChanged<bool> onToggleTheme;
   final VoidCallback onToggleUI;
-  const TasaScreen({super.key, required this.onToggleTheme, required this.onToggleUI});
+  const TasaScreen({
+    super.key,
+    required this.onToggleTheme,
+    required this.onToggleUI,
+  });
 
   @override
   State<TasaScreen> createState() => _TasaScreenState();
@@ -216,7 +259,11 @@ class _TasaScreenState extends State<TasaScreen> {
 
   Future<void> _showTutorialStep(int step) async {
     if (!mounted) return;
-    setState(() { _showTutorial = true; _tutorialStep = step; _spotlightRect = null; });
+    setState(() {
+      _showTutorial = true;
+      _tutorialStep = step;
+      _spotlightRect = null;
+    });
     final key = step == 0 ? _tutorialToggleKey : _tutorialColorKey;
     final ctx = key.currentContext;
     if (ctx != null && step != 0) {
@@ -235,7 +282,11 @@ class _TasaScreenState extends State<TasaScreen> {
   // report `hasSize` before its parent (e.g. an Align) has settled into its
   // final offset, so a single successful read isn't enough to trust the
   // position — only agreement across frames is.
-  void _measureSpotlightWhenReady(GlobalKey key, [int attempt = 0, Rect? previous]) {
+  void _measureSpotlightWhenReady(
+    GlobalKey key, [
+    int attempt = 0,
+    Rect? previous,
+  ]) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_showTutorial) return;
       final box = key.currentContext?.findRenderObject() as RenderBox?;
@@ -245,7 +296,9 @@ class _TasaScreenState extends State<TasaScreen> {
       final stable = rect != null && rect == previous;
       if (stable || attempt >= 10) {
         if (rect != null) {
-          setState(() { _spotlightRect = rect; });
+          setState(() {
+            _spotlightRect = rect;
+          });
         }
       } else {
         _measureSpotlightWhenReady(key, attempt + 1, rect);
@@ -262,7 +315,10 @@ class _TasaScreenState extends State<TasaScreen> {
   }
 
   Future<void> _finishTutorial() async {
-    setState(() { _showTutorial = false; _spotlightRect = null; });
+    setState(() {
+      _showTutorial = false;
+      _spotlightRect = null;
+    });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_tutorialSeenKey, true);
   }
@@ -276,14 +332,21 @@ class _TasaScreenState extends State<TasaScreen> {
     final val = prefs.getInt(_accentKey);
     if (val != null && mounted) {
       final c = Color(val);
-      setState(() { _accent = c; _accentDeep = _darken(c, 0.18); });
+      setState(() {
+        _accent = c;
+        _accentDeep = _darken(c, 0.18);
+      });
     }
   }
 
   void _setAccent(Color c) {
-    setState(() { _accent = c; _accentDeep = _darken(c, 0.18); });
-    SharedPreferences.getInstance()
-        .then((p) => p.setInt(_accentKey, c.toARGB32()));
+    setState(() {
+      _accent = c;
+      _accentDeep = _darken(c, 0.18);
+    });
+    SharedPreferences.getInstance().then(
+      (p) => p.setInt(_accentKey, c.toARGB32()),
+    );
   }
 
   void _openColorPicker() {
@@ -307,7 +370,10 @@ class _TasaScreenState extends State<TasaScreen> {
             child: const Text('Cancelar'),
           ),
           TextButton(
-            onPressed: () { _setAccent(temp); Navigator.pop(context); },
+            onPressed: () {
+              _setAccent(temp);
+              Navigator.pop(context);
+            },
             child: const Text('Aceptar'),
           ),
         ],
@@ -342,7 +408,12 @@ class _TasaScreenState extends State<TasaScreen> {
 
   Future<void> _fetchRates({bool showLoading = true}) async {
     try {
-      if (showLoading && mounted) setState(() { _isLoading = true; _error = null; });
+      if (showLoading && mounted) {
+        setState(() {
+          _isLoading = true;
+          _error = null;
+        });
+      }
       final fetched = await _service.fetchPrices();
       final idx = _service.initialIndex(fetched);
       await _service.cacheRates(fetched[idx]);
@@ -354,8 +425,12 @@ class _TasaScreenState extends State<TasaScreen> {
         _isLoading = false;
         _error = null;
       });
-      unawaited(_service.updateHomeWidget(
-          _service.rateForWidget(fetched), _usdtLastUpdatedAt));
+      unawaited(
+        _service.updateHomeWidget(
+          _service.rateForWidget(fetched),
+          _usdtLastUpdatedAt,
+        ),
+      );
       _recalculate();
     } on TimeoutException {
       await _handleFetchError('Tiempo de espera agotado.');
@@ -368,12 +443,24 @@ class _TasaScreenState extends State<TasaScreen> {
     }
   }
 
+  Future<void> _onRefresh() async {
+    await _fetchRates(showLoading: false);
+    if (_fromCurrency == 'USDT') {
+      await _loadUsdtForView(force: true);
+    }
+  }
+
   Future<void> _handleFetchError(String msg) async {
     final cached = await _service.readCachedRates();
     if (!mounted) return;
-    final fallback = cached ??
+    final fallback =
+        cached ??
         ExchangeRates(
-            usdToVes: 0, eurToVes: 0, usdtToVes: 0, lastUpdate: DateTime.now());
+          usdToVes: 0,
+          eurToVes: 0,
+          usdtToVes: 0,
+          lastUpdate: DateTime.now(),
+        );
     setState(() {
       _error = cached != null ? '$msg Mostrando última tasa guardada.' : msg;
       _isLoading = false;
@@ -441,33 +528,55 @@ class _TasaScreenState extends State<TasaScreen> {
   }
 
   void _updateBottom() {
-    if (_rates == null) { _setCtrl(_botCtrl, ''); return; }
+    if (_rates == null) {
+      _setCtrl(_botCtrl, '');
+      return;
+    }
     final input = _topCtrl.text.trim();
-    if (input.isEmpty) { _setCtrl(_botCtrl, ''); return; }
+    if (input.isEmpty) {
+      _setCtrl(_botCtrl, '');
+      return;
+    }
     final amount = _parse(input, isVes: false);
-    if (amount == null) { _setCtrl(_botCtrl, ''); return; }
+    if (amount == null) {
+      _setCtrl(_botCtrl, '');
+      return;
+    }
     _setCtrl(_botCtrl, _fmtVes(amount * _rateInVes(_fromCurrency)));
   }
 
   void _updateTop() {
-    if (_rates == null) { _setCtrl(_topCtrl, ''); return; }
+    if (_rates == null) {
+      _setCtrl(_topCtrl, '');
+      return;
+    }
     final input = _botCtrl.text.trim();
-    if (input.isEmpty) { _setCtrl(_topCtrl, ''); return; }
+    if (input.isEmpty) {
+      _setCtrl(_topCtrl, '');
+      return;
+    }
     final amount = _parse(input, isVes: true);
-    if (amount == null) { _setCtrl(_topCtrl, ''); return; }
+    if (amount == null) {
+      _setCtrl(_topCtrl, '');
+      return;
+    }
     final rate = _rateInVes(_fromCurrency);
     _setCtrl(_topCtrl, rate > 0 ? (amount / rate).toStringAsFixed(2) : '');
   }
 
   void _selectCurrency(String currency) {
-    setState(() { _fromCurrency = currency; });
+    setState(() {
+      _fromCurrency = currency;
+    });
     if (currency == 'USDT') unawaited(_loadUsdtForView());
     _recalculate();
   }
 
   void _changeUsdtMode(UsdtRateMode mode) {
     if (_usdtRateMode == mode) return;
-    setState(() { _usdtRateMode = mode; });
+    setState(() {
+      _usdtRateMode = mode;
+    });
     _recalculate();
   }
 
@@ -482,9 +591,9 @@ class _TasaScreenState extends State<TasaScreen> {
     }
     await Clipboard.setData(ClipboardData(text: monto));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Monto copiado: $monto $currency')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Monto copiado: $monto $currency')));
   }
 
   void _clearConv() {
@@ -496,23 +605,33 @@ class _TasaScreenState extends State<TasaScreen> {
     if (_isLoadingUsdtQuote) return;
     if (!force && _usdtBuyRate != null && _usdtSellRate != null) return;
     final fallback = _rates?.usdtToVes ?? _rates?.usdToVes ?? 0;
-    setState(() { _isLoadingUsdtQuote = true; });
+    setState(() {
+      _isLoadingUsdtQuote = true;
+    });
     try {
       final q = force
           ? await _service.fetchUsdtFromBinance()
           : await _service.fetchUsdtQuoteWithCache(fallback);
       if (!mounted) return;
-      setState(() { _applyUsdtQuote(q); _isLoadingUsdtQuote = false; });
+      setState(() {
+        _applyUsdtQuote(q);
+        _isLoadingUsdtQuote = false;
+      });
       _recalculate();
     } catch (_) {
       if (!mounted) return;
-      setState(() { _isLoadingUsdtQuote = false; });
+      setState(() {
+        _isLoadingUsdtQuote = false;
+      });
     }
   }
 
   void _selectRate(int index) {
     if (index < 0 || index >= _rateOptions.length) return;
-    setState(() { _selectedRateIndex = index; _rates = _rateOptions[index]; });
+    setState(() {
+      _selectedRateIndex = index;
+      _rates = _rateOptions[index];
+    });
     _recalculate();
   }
 
@@ -525,7 +644,8 @@ class _TasaScreenState extends State<TasaScreen> {
     if (x == null || x <= 0) return;
     setState(() {
       _items.add(
-          _CalcItem(isUsd: true, usd: x, bs: x * (_rates?.usdToVes ?? 0)));
+        _CalcItem(isUsd: true, usd: x, bs: x * (_rates?.usdToVes ?? 0)),
+      );
       _calcUsdCtrl.clear();
     });
   }
@@ -535,8 +655,7 @@ class _TasaScreenState extends State<TasaScreen> {
     if (y == null || y <= 0) return;
     final rate = _rates?.usdToVes ?? 0;
     setState(() {
-      _items.add(_CalcItem(
-          isUsd: false, usd: rate > 0 ? y / rate : 0, bs: y));
+      _items.add(_CalcItem(isUsd: false, usd: rate > 0 ? y / rate : 0, bs: y));
       _calcBsCtrl.clear();
     });
   }
@@ -554,22 +673,27 @@ class _TasaScreenState extends State<TasaScreen> {
   Future<void> _share() async {
     final topText = _topCtrl.text.trim();
     final botText = _botCtrl.text.trim();
-    final ratio =
-        (MediaQuery.of(context).devicePixelRatio * 2).clamp(2.0, 4.0);
+    final ratio = (MediaQuery.of(context).devicePixelRatio * 2).clamp(2.0, 4.0);
     try {
       final bytes = await _screenshotCtrl.capture(
-          pixelRatio: ratio, delay: const Duration(milliseconds: 80));
+        pixelRatio: ratio,
+        delay: const Duration(milliseconds: 80),
+      );
       if (bytes == null || bytes.isEmpty) return;
       final dir = await getTemporaryDirectory();
       final file = File(
-          '${dir.path}/rapidobcv_${DateTime.now().millisecondsSinceEpoch}.png');
+        '${dir.path}/rapidobcv_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
       await file.writeAsBytes(bytes, flush: true);
-      await SharePlus.instance.share(ShareParams(
-        files: [XFile(file.path, mimeType: 'image/png')],
-        text: 'Monto en $_fromCurrency: ${topText.isEmpty ? '-' : topText}\n'
-            'Monto en VES: ${botText.isEmpty ? '-' : botText}',
-        subject: 'RápidoBCV',
-      ));
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'image/png')],
+          text:
+              'Monto en $_fromCurrency: ${topText.isEmpty ? '-' : topText}\n'
+              'Monto en VES: ${botText.isEmpty ? '-' : botText}',
+          subject: 'RápidoBCV',
+        ),
+      );
     } catch (_) {}
   }
 
@@ -630,17 +754,23 @@ class _TasaScreenState extends State<TasaScreen> {
 
   String _heroLabel() {
     switch (_fromCurrency) {
-      case 'EUR':  return 'Euro oficial · BCV';
-      case 'USDT': return 'USDT · Binance P2P';
-      default:     return 'Dólar oficial · BCV';
+      case 'EUR':
+        return 'Euro oficial · BCV';
+      case 'USDT':
+        return 'USDT · Binance P2P';
+      default:
+        return 'Dólar oficial · BCV';
     }
   }
 
   String _currencySymbol(String c) {
     switch (c) {
-      case 'EUR':  return '€';
-      case 'USDT': return '₮';
-      default:     return r'$';
+      case 'EUR':
+        return '€';
+      case 'USDT':
+        return '₮';
+      default:
+        return r'$';
     }
   }
 
@@ -666,38 +796,45 @@ class _TasaScreenState extends State<TasaScreen> {
       body: Stack(
         children: [
           SafeArea(
-        child: SingleChildScrollView(
-          controller: _scrollCtrl,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Screenshot(
-                controller: _screenshotCtrl,
-                child: ColoredBox(
-                  color: c.screen,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildHeader(c, isDark),
-                      _buildCurrencyCards(c),
-                      _buildHero(c),
-                      if (_fromCurrency == 'USDT' &&
-                              _usdtBuyRate != null && _usdtSellRate != null)
-                          _buildUsdtModeSelector(c)
-                        else if (_rateOptions.length >= 2)
-                          _buildDateSelector(c),
-                      _buildConversor(c),
-                      _buildActions(c),
-                    ],
-                  ),
+            child: RefreshIndicator(
+              onRefresh: _onRefresh,
+              color: c.accent,
+              backgroundColor: c.card,
+              child: SingleChildScrollView(
+                controller: _scrollCtrl,
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Screenshot(
+                      controller: _screenshotCtrl,
+                      child: ColoredBox(
+                        color: c.screen,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildHeader(c, isDark),
+                            _buildCurrencyCards(c),
+                            _buildHero(c),
+                            if (_fromCurrency == 'USDT' &&
+                                _usdtBuyRate != null &&
+                                _usdtSellRate != null)
+                              _buildUsdtModeSelector(c)
+                            else if (_rateOptions.length >= 2)
+                              _buildDateSelector(c),
+                            _buildConversor(c),
+                            _buildActions(c),
+                          ],
+                        ),
+                      ),
+                    ),
+                    _buildCalculator(c, isDark),
+                    _buildColorPicker(c),
+                    const SizedBox(height: 26),
+                  ],
                 ),
               ),
-              _buildCalculator(c, isDark),
-              _buildColorPicker(c),
-              const SizedBox(height: 26),
-            ],
-          ),
-        ),
+            ),
           ),
           if (_showTutorial) _buildTutorialOverlay(c),
         ],
@@ -732,7 +869,9 @@ class _TasaScreenState extends State<TasaScreen> {
     double? cardTop;
     double? cardBottom;
     if (cardBelow) {
-      final double desired = rect == null ? size.height * 0.28 : rect.bottom + 28;
+      final double desired = rect == null
+          ? size.height * 0.28
+          : rect.bottom + 28;
       final double minTop = topInset + 96;
       cardTop = desired < minTop ? minTop : desired;
     } else {
@@ -761,7 +900,8 @@ class _TasaScreenState extends State<TasaScreen> {
           Text(
             title,
             style: GoogleFonts.spaceGrotesk(
-              fontSize: 18, fontWeight: FontWeight.w800,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
               color: isDark ? Colors.white : const Color(0xFF14161A),
             ),
           ),
@@ -769,29 +909,40 @@ class _TasaScreenState extends State<TasaScreen> {
           Text(
             body,
             style: TextStyle(
-              fontSize: 14, height: 1.4,
+              fontSize: 14,
+              height: 1.4,
               color: isDark ? Colors.white70 : const Color(0xFF4A4F57),
             ),
           ),
           const SizedBox(height: 18),
           Row(
             children: [
-              Text('Paso ${_tutorialStep + 1} de 2',
-                  style: TextStyle(fontSize: 12, color: c.dim)),
+              Text(
+                'Paso ${_tutorialStep + 1} de 2',
+                style: TextStyle(fontSize: 12, color: c.dim),
+              ),
               const Spacer(),
               GestureDetector(
                 onTap: _finishTutorial,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Text('Saltar',
-                      style: TextStyle(fontSize: 14, color: c.dim)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'Saltar',
+                    style: TextStyle(fontSize: 14, color: c.dim),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: _nextTutorialStep,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: c.accentText,
                     borderRadius: BorderRadius.circular(12),
@@ -799,7 +950,8 @@ class _TasaScreenState extends State<TasaScreen> {
                   child: Text(
                     _tutorialStep == 0 ? 'Siguiente' : '¡Entendido!',
                     style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                   ),
@@ -851,22 +1003,28 @@ class _TasaScreenState extends State<TasaScreen> {
           Align(
             alignment: Alignment.center,
             child: RichText(
-              text: TextSpan(children: [
-                TextSpan(
-                  text: 'Rápido',
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 24, fontWeight: FontWeight.w800,
-                    color: c.text, letterSpacing: -0.5,
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Rápido',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: c.text,
+                      letterSpacing: -0.5,
+                    ),
                   ),
-                ),
-                TextSpan(
-                  text: 'BCV',
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 24, fontWeight: FontWeight.w800,
-                    color: c.accentText, letterSpacing: -0.5,
+                  TextSpan(
+                    text: 'BCV',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: c.accentText,
+                      letterSpacing: -0.5,
+                    ),
                   ),
-                ),
-              ]),
+                ],
+              ),
             ),
           ),
           Align(
@@ -878,7 +1036,8 @@ class _TasaScreenState extends State<TasaScreen> {
                   onTap: widget.onToggleUI,
                   child: Container(
                     key: _tutorialToggleKey,
-                    width: 40, height: 40,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: c.toggleBg,
                       borderRadius: BorderRadius.circular(13),
@@ -890,14 +1049,18 @@ class _TasaScreenState extends State<TasaScreen> {
                 GestureDetector(
                   onTap: () => widget.onToggleTheme(isDark),
                   child: Container(
-                    width: 40, height: 40,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: c.toggleBg,
                       borderRadius: BorderRadius.circular(13),
                     ),
                     child: Icon(
-                      isDark ? Icons.wb_sunny_outlined : Icons.dark_mode_outlined,
-                      color: c.dim, size: 18,
+                      isDark
+                          ? Icons.wb_sunny_outlined
+                          : Icons.dark_mode_outlined,
+                      color: c.dim,
+                      size: 18,
                     ),
                   ),
                 ),
@@ -921,24 +1084,33 @@ class _TasaScreenState extends State<TasaScreen> {
       child: Row(
         children: [
           _CurrencyCard(
-            currency: 'USD', rate: usdRate,
+            currency: 'USD',
+            rate: usdRate,
             isSelected: _fromCurrency == 'USD',
             onTap: () => _selectCurrency('USD'),
-            accent: _accent, accentDeep: _accentDeep, c: c,
+            accent: _accent,
+            accentDeep: _accentDeep,
+            c: c,
           ),
           const SizedBox(width: 8),
           _CurrencyCard(
-            currency: 'EUR', rate: eurRate,
+            currency: 'EUR',
+            rate: eurRate,
             isSelected: _fromCurrency == 'EUR',
             onTap: () => _selectCurrency('EUR'),
-            accent: _accent, accentDeep: _accentDeep, c: c,
+            accent: _accent,
+            accentDeep: _accentDeep,
+            c: c,
           ),
           const SizedBox(width: 8),
           _CurrencyCard(
-            currency: 'USDT', rate: usdtRate,
+            currency: 'USDT',
+            rate: usdtRate,
             isSelected: _fromCurrency == 'USDT',
             onTap: () => _selectCurrency('USDT'),
-            accent: _accent, accentDeep: _accentDeep, c: c,
+            accent: _accent,
+            accentDeep: _accentDeep,
+            c: c,
           ),
         ],
       ),
@@ -953,7 +1125,9 @@ class _TasaScreenState extends State<TasaScreen> {
         : _fmtVes(_currentRate);
     final trend = _trendText;
     final isUp = _trendUp;
-    final downColor = c.isDark ? const Color(0xFFFC6868) : const Color(0xFFDC2626);
+    final downColor = c.isDark
+        ? const Color(0xFFFC6868)
+        : const Color(0xFFDC2626);
     final trendColor = isUp ? c.up : downColor;
 
     return Padding(
@@ -964,8 +1138,10 @@ class _TasaScreenState extends State<TasaScreen> {
           Text(
             _heroLabel().toUpperCase(),
             style: TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w700,
-              letterSpacing: 1.5, color: c.accentText,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+              color: c.accentText,
             ),
           ),
           const SizedBox(height: 6),
@@ -976,15 +1152,19 @@ class _TasaScreenState extends State<TasaScreen> {
               Text(
                 rateStr,
                 style: GoogleFonts.spaceGrotesk(
-                  fontSize: 58, fontWeight: FontWeight.w700,
-                  color: c.heroNum, letterSpacing: -2, height: 0.9,
+                  fontSize: 58,
+                  fontWeight: FontWeight.w700,
+                  color: c.heroNum,
+                  letterSpacing: -2,
+                  height: 0.9,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 'Bs',
                 style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w600,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
                   color: c.accentText,
                 ),
               ),
@@ -995,8 +1175,10 @@ class _TasaScreenState extends State<TasaScreen> {
             children: [
               if (trend != null) ...[
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: trendColor.withValues(alpha: c.isDark ? 0.14 : 0.13),
                     borderRadius: BorderRadius.circular(8),
@@ -1006,14 +1188,18 @@ class _TasaScreenState extends State<TasaScreen> {
                     children: [
                       Icon(
                         isUp ? Icons.trending_up : Icons.trending_down,
-                        size: 12, color: trendColor,
+                        size: 12,
+                        color: trendColor,
                       ),
                       const SizedBox(width: 5),
-                      Text(trend,
-                          style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w700,
-                            color: trendColor,
-                          )),
+                      Text(
+                        trend,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: trendColor,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1023,8 +1209,8 @@ class _TasaScreenState extends State<TasaScreen> {
                 _rates != null
                     ? 'actualizado ${_fmtTime(_rates!.lastUpdate)} · ${_shortDate(_rates!.lastUpdate)}'
                     : _isLoading
-                        ? 'actualizando…'
-                        : 'sin conexión',
+                    ? 'actualizando…'
+                    : 'sin conexión',
                 style: TextStyle(fontSize: 13, color: c.dim),
               ),
             ],
@@ -1032,8 +1218,10 @@ class _TasaScreenState extends State<TasaScreen> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(_error!,
-                  style: const TextStyle(fontSize: 11, color: Colors.orange)),
+              child: Text(
+                _error!,
+                style: const TextStyle(fontSize: 11, color: Colors.orange),
+              ),
             ),
         ],
       ),
@@ -1102,7 +1290,12 @@ class _TasaScreenState extends State<TasaScreen> {
         child: Row(
           children: [
             _buildUsdtTab(c, UsdtRateMode.buyAverage, 'Venta', _usdtBuyRate!),
-            _buildUsdtTab(c, UsdtRateMode.sellAverage, 'Compra', _usdtSellRate!),
+            _buildUsdtTab(
+              c,
+              UsdtRateMode.sellAverage,
+              'Compra',
+              _usdtSellRate!,
+            ),
           ],
         ),
       ),
@@ -1131,7 +1324,8 @@ class _TasaScreenState extends State<TasaScreen> {
                 label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                   color: isActive ? c.dateActiveText : c.dim,
                 ),
               ),
@@ -1193,12 +1387,18 @@ class _TasaScreenState extends State<TasaScreen> {
                               child: Text(
                                 'TENGO · $_fromCurrency',
                                 style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5, color: c.dim,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                  color: c.dim,
                                 ),
                               ),
                             ),
-                            _fieldIconBtn(Icons.copy_rounded, () => _copyField(_topCtrl, _fromCurrency), c),
+                            _fieldIconBtn(
+                              Icons.copy_rounded,
+                              () => _copyField(_topCtrl, _fromCurrency),
+                              c,
+                            ),
                             const SizedBox(width: 2),
                             _fieldIconBtn(Icons.clear, _clearConv, c),
                           ],
@@ -1211,7 +1411,8 @@ class _TasaScreenState extends State<TasaScreen> {
                             Text(
                               _currencySymbol(_fromCurrency),
                               style: GoogleFonts.spaceGrotesk(
-                                fontSize: 22, fontWeight: FontWeight.w700,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
                                 color: c.dim,
                               ),
                             ),
@@ -1219,9 +1420,13 @@ class _TasaScreenState extends State<TasaScreen> {
                             Expanded(
                               child: TextField(
                                 controller: _topCtrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 26, fontWeight: FontWeight.w700,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
                                   color: c.heroNum,
                                 ),
                                 decoration: InputDecoration(
@@ -1230,12 +1435,15 @@ class _TasaScreenState extends State<TasaScreen> {
                                   contentPadding: EdgeInsets.zero,
                                   hintText: '0,00',
                                   hintStyle: GoogleFonts.spaceGrotesk(
-                                    color: c.dim, fontSize: 26,
+                                    color: c.dim,
+                                    fontSize: 26,
                                   ),
                                 ),
                                 onChanged: (_) {
                                   if (!_isUpdatingText) {
-                                    setState(() { _convSrcIsTop = true; });
+                                    setState(() {
+                                      _convSrcIsTop = true;
+                                    });
                                     _updateBottom();
                                   }
                                 },
@@ -1247,7 +1455,11 @@ class _TasaScreenState extends State<TasaScreen> {
                     ),
                   ),
                   // Divider
-                  Container(height: 1, color: c.border, margin: const EdgeInsets.symmetric(horizontal: 12)),
+                  Container(
+                    height: 1,
+                    color: c.border,
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
                   // Bottom: Bs
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -1260,12 +1472,18 @@ class _TasaScreenState extends State<TasaScreen> {
                               child: Text(
                                 'RECIBO · VES',
                                 style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5, color: c.dim,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                  color: c.dim,
                                 ),
                               ),
                             ),
-                            _fieldIconBtn(Icons.copy_rounded, () => _copyField(_botCtrl, 'VES'), c),
+                            _fieldIconBtn(
+                              Icons.copy_rounded,
+                              () => _copyField(_botCtrl, 'VES'),
+                              c,
+                            ),
                             const SizedBox(width: 2),
                             _fieldIconBtn(Icons.clear, _clearConv, c),
                           ],
@@ -1278,7 +1496,8 @@ class _TasaScreenState extends State<TasaScreen> {
                             Text(
                               'Bs',
                               style: GoogleFonts.spaceGrotesk(
-                                fontSize: 22, fontWeight: FontWeight.w700,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
                                 color: c.dim,
                               ),
                             ),
@@ -1286,9 +1505,13 @@ class _TasaScreenState extends State<TasaScreen> {
                             Expanded(
                               child: TextField(
                                 controller: _botCtrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 26, fontWeight: FontWeight.w700,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
                                   color: c.accentText,
                                 ),
                                 decoration: InputDecoration(
@@ -1297,12 +1520,15 @@ class _TasaScreenState extends State<TasaScreen> {
                                   contentPadding: EdgeInsets.zero,
                                   hintText: '0,00',
                                   hintStyle: GoogleFonts.spaceGrotesk(
-                                    color: c.dim, fontSize: 26,
+                                    color: c.dim,
+                                    fontSize: 26,
                                   ),
                                 ),
                                 onChanged: (_) {
                                   if (!_isUpdatingText) {
-                                    setState(() { _convSrcIsTop = false; });
+                                    setState(() {
+                                      _convSrcIsTop = false;
+                                    });
                                     _updateTop();
                                   }
                                 },
@@ -1326,7 +1552,9 @@ class _TasaScreenState extends State<TasaScreen> {
 
   Widget _buildActions(_TC c) {
     final softStrong = _accent.withValues(alpha: 0.6);
-    final btnShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    final btnShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+    );
     final btnHeight = const Size.fromHeight(48);
 
     return Padding(
@@ -1343,7 +1571,8 @@ class _TasaScreenState extends State<TasaScreen> {
                 minimumSize: btnHeight,
                 shape: btnShape,
                 textStyle: GoogleFonts.plusJakartaSans(
-                  fontSize: 14, fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1361,7 +1590,8 @@ class _TasaScreenState extends State<TasaScreen> {
                 shadowColor: softStrong,
                 elevation: 8,
                 textStyle: GoogleFonts.plusJakartaSans(
-                  fontSize: 14, fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -1396,7 +1626,9 @@ class _TasaScreenState extends State<TasaScreen> {
                 Text(
                   'Calculadora de compras',
                   style: GoogleFonts.spaceGrotesk(
-                    fontSize: 16, fontWeight: FontWeight.w800, color: c.text,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: c.text,
                   ),
                 ),
                 if (_items.isNotEmpty)
@@ -1405,7 +1637,11 @@ class _TasaScreenState extends State<TasaScreen> {
                     icon: Icon(Icons.delete_outline, size: 13, color: c.dim),
                     label: Text(
                       'Limpiar',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.dim),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: c.dim,
+                      ),
                     ),
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.zero,
@@ -1442,8 +1678,10 @@ class _TasaScreenState extends State<TasaScreen> {
                   Text(
                     'EQUIVALENTE TOTAL',
                     style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5, color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: Colors.white.withValues(alpha: 0.85),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -1454,30 +1692,47 @@ class _TasaScreenState extends State<TasaScreen> {
                       Text(
                         _fmtVes(_totalBs),
                         style: GoogleFonts.spaceGrotesk(
-                          fontSize: 34, fontWeight: FontWeight.w800,
-                          color: Colors.white, letterSpacing: -1,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -1,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         'Bs',
                         style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                           color: Colors.white.withValues(alpha: 0.9),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Divider(color: Colors.white.withValues(alpha: 0.2), thickness: 1, height: 1),
+                  Divider(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    thickness: 1,
+                    height: 1,
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Acumulado', style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.9))),
+                      Text(
+                        'Acumulado',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
                       Text(
                         '\$ ${_fmtVes(_totalUsd)}',
-                        style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w800, color: Colors.white),
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
                       ),
                     ],
                   ),
@@ -1485,10 +1740,20 @@ class _TasaScreenState extends State<TasaScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Tasa usada (BCV USD)', style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.9))),
+                      Text(
+                        'Tasa usada (BCV USD)',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
                       Text(
                         '${_fmtVes(_rates?.usdToVes ?? 0)} Bs',
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       ),
                     ],
                   ),
@@ -1518,7 +1783,10 @@ class _TasaScreenState extends State<TasaScreen> {
             _CalcInputRow(
               controller: _calcBsCtrl,
               prefix: 'Bs',
-              prefixStyle: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w800),
+              prefixStyle: GoogleFonts.spaceGrotesk(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
               hint: 'Monto en Bs',
               onSubmit: _addBs,
               buttonLabel: 'Bs',
@@ -1537,7 +1805,10 @@ class _TasaScreenState extends State<TasaScreen> {
             // Items list or empty state
             if (_items.isEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 20,
+                  horizontal: 10,
+                ),
                 decoration: BoxDecoration(
                   border: Border.all(color: c.border),
                   borderRadius: BorderRadius.circular(13),
@@ -1553,7 +1824,10 @@ class _TasaScreenState extends State<TasaScreen> {
                     Text(
                       'Suma compras y ve el total acumulado.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: c.dim.withValues(alpha: 0.8)),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: c.dim.withValues(alpha: 0.8),
+                      ),
                     ),
                   ],
                 ),
@@ -1565,18 +1839,25 @@ class _TasaScreenState extends State<TasaScreen> {
                   final it = entry.value;
                   final badgeBg = it.isUsd
                       ? _accent.withValues(alpha: isDark ? 0.22 : 0.14)
-                      : (isDark ? const Color(0xFF1C2530) : const Color(0xFFEEF1F4));
+                      : (isDark
+                            ? const Color(0xFF1C2530)
+                            : const Color(0xFFEEF1F4));
                   final badgeText = it.isUsd ? c.accentText : c.dim;
                   final main = it.isUsd
-                      ? '\$ ${_fmtVes(it.usd)}' : '${_fmtVes(it.bs)} Bs';
+                      ? '\$ ${_fmtVes(it.usd)}'
+                      : '${_fmtVes(it.bs)} Bs';
                   final sub = it.isUsd
-                      ? '${_fmtVes(it.bs)} Bs' : '\$ ${_fmtVes(it.usd)}';
+                      ? '${_fmtVes(it.bs)} Bs'
+                      : '\$ ${_fmtVes(it.usd)}';
 
                   return Container(
                     margin: EdgeInsets.only(
-                        bottom: i < _items.length - 1 ? 8 : 0),
+                      bottom: i < _items.length - 1 ? 8 : 0,
+                    ),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 11),
+                      horizontal: 12,
+                      vertical: 11,
+                    ),
                     decoration: BoxDecoration(
                       color: c.item,
                       borderRadius: BorderRadius.circular(13),
@@ -1584,7 +1865,8 @@ class _TasaScreenState extends State<TasaScreen> {
                     child: Row(
                       children: [
                         Container(
-                          width: 34, height: 34,
+                          width: 34,
+                          height: 34,
                           decoration: BoxDecoration(
                             color: badgeBg,
                             borderRadius: BorderRadius.circular(10),
@@ -1593,7 +1875,8 @@ class _TasaScreenState extends State<TasaScreen> {
                             child: Text(
                               it.isUsd ? r'$' : 'Bs',
                               style: GoogleFonts.spaceGrotesk(
-                                fontSize: 13, fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
                                 color: badgeText,
                               ),
                             ),
@@ -1607,7 +1890,8 @@ class _TasaScreenState extends State<TasaScreen> {
                               Text(
                                 main,
                                 style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 15, fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
                                   color: c.text,
                                 ),
                               ),
@@ -1622,7 +1906,8 @@ class _TasaScreenState extends State<TasaScreen> {
                         GestureDetector(
                           onTap: () => _removeItem(i),
                           child: Container(
-                            width: 30, height: 30,
+                            width: 30,
+                            height: 30,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(9),
                             ),
@@ -1662,7 +1947,9 @@ class _TasaScreenState extends State<TasaScreen> {
             Text(
               'Color de la app',
               style: GoogleFonts.spaceGrotesk(
-                fontSize: 14, fontWeight: FontWeight.w800, color: c.text,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: c.text,
               ),
             ),
             const SizedBox(height: 2),
@@ -1680,7 +1967,8 @@ class _TasaScreenState extends State<TasaScreen> {
                   return GestureDetector(
                     onTap: () => _setAccent(p.base),
                     child: Container(
-                      width: 34, height: 34,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: p.base,
                         shape: BoxShape.circle,
@@ -1700,7 +1988,11 @@ class _TasaScreenState extends State<TasaScreen> {
                             : null,
                       ),
                       child: selected
-                          ? const Icon(Icons.check, color: Colors.white, size: 16)
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 16,
+                            )
                           : null,
                     ),
                   );
@@ -1709,14 +2001,21 @@ class _TasaScreenState extends State<TasaScreen> {
                 GestureDetector(
                   onTap: _openColorPicker,
                   child: Container(
-                    width: 34, height: 34,
+                    width: 34,
+                    height: 34,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: const SweepGradient(colors: [
-                        Color(0xFFF97316), Color(0xFFEC4899), Color(0xFF7C5CFF),
-                        Color(0xFF2F6FED), Color(0xFF06B6D4), Color(0xFF10B981),
-                        Color(0xFFF97316),
-                      ]),
+                      gradient: const SweepGradient(
+                        colors: [
+                          Color(0xFFF97316),
+                          Color(0xFFEC4899),
+                          Color(0xFF7C5CFF),
+                          Color(0xFF2F6FED),
+                          Color(0xFF06B6D4),
+                          Color(0xFF10B981),
+                          Color(0xFFF97316),
+                        ],
+                      ),
                       boxShadow: isCustom
                           ? [
                               BoxShadow(
@@ -1734,16 +2033,20 @@ class _TasaScreenState extends State<TasaScreen> {
                     ),
                     child: Center(
                       child: Container(
-                        width: 14, height: 14,
+                        width: 14,
+                        height: 14,
                         decoration: BoxDecoration(
-                          color: c.card, shape: BoxShape.circle,
+                          color: c.card,
+                          shape: BoxShape.circle,
                         ),
                         child: Center(
                           child: Text(
                             '+',
                             style: TextStyle(
-                              color: c.text, fontSize: 11,
-                              fontWeight: FontWeight.w800, height: 1,
+                              color: c.text,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
                             ),
                           ),
                         ),
@@ -1774,8 +2077,12 @@ class _CurrencyCard extends StatelessWidget {
   final _TC c;
 
   const _CurrencyCard({
-    required this.currency, required this.rate, required this.isSelected,
-    required this.onTap, required this.accent, required this.accentDeep,
+    required this.currency,
+    required this.rate,
+    required this.isSelected,
+    required this.onTap,
+    required this.accent,
+    required this.accentDeep,
     required this.c,
   });
 
@@ -1808,7 +2115,7 @@ class _CurrencyCard extends StatelessWidget {
                       blurRadius: 22,
                       offset: const Offset(0, 10),
                       spreadRadius: -8,
-                    )
+                    ),
                   ]
                 : null,
           ),
@@ -1818,16 +2125,20 @@ class _CurrencyCard extends StatelessWidget {
               Text(
                 currency,
                 style: TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: isSelected ? Colors.white.withValues(alpha: 0.85) : c.dim,
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.85)
+                      : c.dim,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 rate,
                 style: GoogleFonts.spaceGrotesk(
-                  fontSize: 16, fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
                   color: isSelected ? Colors.white : c.text,
                 ),
               ),
@@ -1859,10 +2170,18 @@ class _CalcInputRow extends StatelessWidget {
   final Color dimColor;
 
   const _CalcInputRow({
-    required this.controller, required this.prefix, this.prefixStyle,
-    required this.hint, required this.onSubmit, required this.buttonLabel,
-    required this.buttonBg, required this.buttonFg, required this.buttonElevation,
-    required this.inputBg, required this.inputBorder, required this.inputTextColor,
+    required this.controller,
+    required this.prefix,
+    this.prefixStyle,
+    required this.hint,
+    required this.onSubmit,
+    required this.buttonLabel,
+    required this.buttonBg,
+    required this.buttonFg,
+    required this.buttonElevation,
+    required this.inputBg,
+    required this.inputBorder,
+    required this.inputTextColor,
     required this.dimColor,
   });
 
@@ -1883,9 +2202,11 @@ class _CalcInputRow extends StatelessWidget {
               children: [
                 Text(
                   prefix,
-                  style: prefixStyle ??
+                  style:
+                      prefixStyle ??
                       GoogleFonts.spaceGrotesk(
-                        fontSize: 15, fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                         color: dimColor,
                       ),
                 ),
@@ -1893,12 +2214,15 @@ class _CalcInputRow extends StatelessWidget {
                 Expanded(
                   child: TextField(
                     controller: controller,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                     ],
                     style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                       color: inputTextColor,
                     ),
                     decoration: InputDecoration(
@@ -1927,9 +2251,11 @@ class _CalcInputRow extends StatelessWidget {
               shadowColor: Colors.transparent,
               elevation: buttonElevation,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13)),
+                borderRadius: BorderRadius.circular(13),
+              ),
               textStyle: GoogleFonts.plusJakartaSans(
-                fontSize: 13, fontWeight: FontWeight.w800,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 15),
             ),
