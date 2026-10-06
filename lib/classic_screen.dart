@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'historial_sheet.dart';
 import 'rates_service.dart';
 
 class ConversorPage extends StatefulWidget {
@@ -41,6 +42,8 @@ class _ConversorPageState extends State<ConversorPage> {
   List<String> _rateLabelsCache = const [];
   String? _acquisitionTextCache;
   int selectedRateIndex = 0;
+  // Tasa elegida en el calendario del histórico (null = se usa rateOptions).
+  ExchangeRates? _historicalRate;
   ExchangeRates? rates;
   bool isLoading = true;
   String? error;
@@ -109,6 +112,7 @@ class _ConversorPageState extends State<ConversorPage> {
         rateOptions = fetchedRates;
         selectedRateIndex = initialIndex;
         rates = selectedRates;
+        _historicalRate = null;
         isLoading = false;
         _actualizarTextosDerivados();
       });
@@ -146,6 +150,7 @@ class _ConversorPageState extends State<ConversorPage> {
       rates = fallbackRates;
       rateOptions = [rates!];
       selectedRateIndex = 0;
+      _historicalRate = null;
       _actualizarTextosDerivados();
     });
     await _service.updateHomeWidget(fallbackRates, _usdtLastUpdatedAt);
@@ -297,6 +302,7 @@ class _ConversorPageState extends State<ConversorPage> {
     setState(() {
       selectedRateIndex = index;
       rates = rateOptions[index];
+      _historicalRate = null;
       _actualizarTextosDerivados();
     });
     _recalcularConversionActual();
@@ -330,7 +336,7 @@ class _ConversorPageState extends State<ConversorPage> {
     });
   }
 
-  void _agregarMontoCalculadoraUsd() {
+  void _agregarMontoCalculadoraUsd({bool restar = false}) {
     final monto = _parseMonto(_calculatorUsdController.text.trim(), isVes: false);
     if (monto == null || monto <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -340,12 +346,13 @@ class _ConversorPageState extends State<ConversorPage> {
       return;
     }
     setState(() {
-      _calculatorEntries.add(_CalculatorEntry(currency: 'USD', amount: monto));
+      _calculatorEntries.add(
+          _CalculatorEntry(currency: 'USD', amount: restar ? -monto : monto));
       _calculatorUsdController.clear();
     });
   }
 
-  void _agregarMontoCalculadoraVes() {
+  void _agregarMontoCalculadoraVes({bool restar = false}) {
     final monto = _parseMonto(_calculatorVesController.text.trim(), isVes: true);
     if (monto == null || monto <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -355,7 +362,8 @@ class _ConversorPageState extends State<ConversorPage> {
       return;
     }
     setState(() {
-      _calculatorEntries.add(_CalculatorEntry(currency: 'VES', amount: monto));
+      _calculatorEntries.add(
+          _CalculatorEntry(currency: 'VES', amount: restar ? -monto : monto));
       _calculatorVesController.clear();
     });
   }
@@ -494,6 +502,22 @@ class _ConversorPageState extends State<ConversorPage> {
     return '$day/$month/$year ${_formatearHora(dateTime)}';
   }
 
+  Future<void> _abrirHistorial() async {
+    final picked = await showHistorialSheet(
+      context,
+      service: _service,
+      accent: Theme.of(context).colorScheme.primary,
+      initialDate: _historicalRate?.lastUpdate ?? rates?.lastUpdate,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _historicalRate = picked.rate;
+      rates = picked.rate;
+      _actualizarTextosDerivados();
+    });
+    _recalcularConversionActual();
+  }
+
   String _labelRegistro(int index) {
     if (index < 0 || index >= rateOptions.length) return 'Sin fecha';
     if (rateOptions.length == 2) {
@@ -516,7 +540,10 @@ class _ConversorPageState extends State<ConversorPage> {
           : DateTime(baseDate.year, baseDate.month, baseDate.day,
               usdtTime.hour, usdtTime.minute);
     }
-    _acquisitionTextCache = fechaAdquisicionVisible == null
+    final historical = _historicalRate;
+    _acquisitionTextCache = historical != null
+        ? 'Tasa histórica del ${_formatearFechaCorta(historical.lastUpdate)}/${historical.lastUpdate.year}'
+        : fechaAdquisicionVisible == null
         ? null
         : 'Fecha de adquisición: ${_formatearFechaAdquisicion(fechaAdquisicionVisible)}';
   }
@@ -548,6 +575,11 @@ class _ConversorPageState extends State<ConversorPage> {
         elevation: 0,
         actions: [
           IconButton(
+            onPressed: _abrirHistorial,
+            tooltip: 'Histórico BCV',
+            icon: const Icon(Icons.calendar_month),
+          ),
+          IconButton(
             onPressed: widget.onToggleUI,
             tooltip: 'Cambiar a vista nueva',
             icon: const Icon(Icons.swap_horiz),
@@ -574,7 +606,8 @@ class _ConversorPageState extends State<ConversorPage> {
                     error: error,
                     rates: rates,
                     selectedCurrency: fromCurrency,
-                    selectedRateIndex: selectedRateIndex,
+                    selectedRateIndex:
+                        _historicalRate == null ? selectedRateIndex : null,
                     rateLabels: _rateLabelsCache,
                     onRetry: () => obtenerTasasActuales(),
                     onSelectCurrency: _seleccionarMonedaDesdeTasa,
@@ -623,6 +656,10 @@ class _ConversorPageState extends State<ConversorPage> {
                   rates == null ? '-' : rates!.usdToVes.toStringAsFixed(2),
               onAddUsd: _agregarMontoCalculadoraUsd,
               onAddVes: _agregarMontoCalculadoraVes,
+              onSubtractUsd: () =>
+                  _agregarMontoCalculadoraUsd(restar: true),
+              onSubtractVes: () =>
+                  _agregarMontoCalculadoraVes(restar: true),
               onUndoLast: _deshacerUltimoMontoCalculadora,
               onClear: _limpiarCalculadora,
               onRemoveEntry: _eliminarMontoCalculadora,
@@ -665,7 +702,7 @@ class _RatesPanel extends StatelessWidget {
   final String? error;
   final ExchangeRates? rates;
   final String selectedCurrency;
-  final int selectedRateIndex;
+  final int? selectedRateIndex;
   final List<String> rateLabels;
   final VoidCallback onRetry;
   final ValueChanged<String> onSelectCurrency;
@@ -771,7 +808,9 @@ class _RatesPanel extends StatelessWidget {
                           label: Text(rateLabels[index]),
                         ),
                       ),
-                      selected: <int>{selectedRateIndex},
+                      // Sin selección mientras se ve una tasa histórica.
+                      emptySelectionAllowed: true,
+                      selected: <int>{?selectedRateIndex},
                       onSelectionChanged: (Set<int> selection) {
                         if (selection.isNotEmpty) {
                           onSelectRateIndex(selection.first);
@@ -986,6 +1025,8 @@ class _UsdCalculatorPanel extends StatelessWidget {
     required this.usdRateText,
     required this.onAddUsd,
     required this.onAddVes,
+    required this.onSubtractUsd,
+    required this.onSubtractVes,
     required this.onUndoLast,
     required this.onClear,
     required this.onRemoveEntry,
@@ -999,6 +1040,8 @@ class _UsdCalculatorPanel extends StatelessWidget {
   final String usdRateText;
   final VoidCallback onAddUsd;
   final VoidCallback onAddVes;
+  final VoidCallback onSubtractUsd;
+  final VoidCallback onSubtractVes;
   final VoidCallback onUndoLast;
   final VoidCallback onClear;
   final ValueChanged<int> onRemoveEntry;
@@ -1068,11 +1111,16 @@ class _UsdCalculatorPanel extends StatelessWidget {
                     onSubmitted: (_) => onAddUsd(),
                   ),
                 ),
-                const SizedBox(width: 10),
-                FilledButton.icon(
+                const SizedBox(width: 8),
+                IconButton.filled(
                   onPressed: onAddUsd,
+                  tooltip: 'Sumar USD',
                   icon: const Icon(Icons.add),
-                  label: const Text('Sumar USD'),
+                ),
+                IconButton.filledTonal(
+                  onPressed: onSubtractUsd,
+                  tooltip: 'Restar USD',
+                  icon: const Icon(Icons.remove),
                 ),
               ],
             ),
@@ -1097,11 +1145,16 @@ class _UsdCalculatorPanel extends StatelessWidget {
                     onSubmitted: (_) => onAddVes(),
                   ),
                 ),
-                const SizedBox(width: 10),
-                FilledButton.icon(
+                const SizedBox(width: 8),
+                IconButton.filled(
                   onPressed: onAddVes,
+                  tooltip: 'Sumar Bs',
                   icon: const Icon(Icons.add),
-                  label: const Text('Sumar Bs'),
+                ),
+                IconButton.filledTonal(
+                  onPressed: onSubtractVes,
+                  tooltip: 'Restar Bs',
+                  icon: const Icon(Icons.remove),
                 ),
               ],
             ),
@@ -1121,7 +1174,12 @@ class _UsdCalculatorPanel extends StatelessWidget {
                     .entries
                     .map((entry) => Chip(
                           label: Text(
-                            '${entry.value.amount.toStringAsFixed(2)} ${entry.value.currency}',
+                            entry.value.amount < 0
+                                ? '− ${(-entry.value.amount).toStringAsFixed(2)} ${entry.value.currency}'
+                                : '${entry.value.amount.toStringAsFixed(2)} ${entry.value.currency}',
+                            style: entry.value.amount < 0
+                                ? TextStyle(color: colorScheme.error)
+                                : null,
                           ),
                           onDeleted: () => onRemoveEntry(entry.key),
                           deleteIcon: const Icon(Icons.close),

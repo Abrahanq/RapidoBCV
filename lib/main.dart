@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'classic_screen.dart';
@@ -59,6 +60,10 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: 'RápidoBCV',
       debugShowCheckedModeBanner: false,
+      // Español para los textos de Material (calendario, menús de copiar/pegar).
+      locale: const Locale('es'),
+      supportedLocales: const [Locale('es')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F6FED)),
         brightness: Brightness.light,

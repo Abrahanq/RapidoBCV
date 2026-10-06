@@ -16,6 +16,7 @@ import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'historial_sheet.dart';
 import 'rates_service.dart';
 
 // ============================================================================
@@ -152,11 +153,12 @@ _TC _colors(bool isDark, Color accent, Color accentDeep) {
 // Calculator item
 // ============================================================================
 
+// El monto se guarda en su moneda original y con signo (negativo = resta);
+// la conversión se calcula siempre con la tasa activa.
 class _CalcItem {
   final bool isUsd;
-  final double usd;
-  final double bs;
-  const _CalcItem({required this.isUsd, required this.usd, required this.bs});
+  final double amount;
+  const _CalcItem({required this.isUsd, required this.amount});
 }
 
 // ============================================================================
@@ -194,6 +196,9 @@ class _TasaScreenState extends State<TasaScreen> {
 
   List<ExchangeRates> _rateOptions = [];
   int _selectedRateIndex = 0;
+  // Tasa elegida en el calendario del histórico (null = se usa _rateOptions).
+  ExchangeRates? _historicalRate;
+  ExchangeRates? _historicalPrev;
   ExchangeRates? _rates;
   bool _isLoading = true;
   String? _error;
@@ -422,6 +427,8 @@ class _TasaScreenState extends State<TasaScreen> {
         _rateOptions = fetched;
         _selectedRateIndex = idx;
         _rates = fetched[idx];
+        _historicalRate = null;
+        _historicalPrev = null;
         _isLoading = false;
         _error = null;
       });
@@ -467,6 +474,8 @@ class _TasaScreenState extends State<TasaScreen> {
       _rates = fallback;
       _rateOptions = [fallback];
       _selectedRateIndex = 0;
+      _historicalRate = null;
+      _historicalPrev = null;
     });
     if (cached != null) {
       unawaited(_service.updateHomeWidget(cached, _usdtLastUpdatedAt));
@@ -631,6 +640,29 @@ class _TasaScreenState extends State<TasaScreen> {
     setState(() {
       _selectedRateIndex = index;
       _rates = _rateOptions[index];
+      _historicalRate = null;
+      _historicalPrev = null;
+    });
+    _recalculate();
+  }
+
+  Future<void> _openHistorial(_TC c) async {
+    final picked = await showHistorialSheet(
+      context,
+      service: _service,
+      accent: c.accentText,
+      background: c.screen,
+      card: c.card,
+      border: c.border,
+      text: c.text,
+      dim: c.dim,
+      initialDate: _historicalRate?.lastUpdate ?? _rates?.lastUpdate,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _historicalRate = picked.rate;
+      _historicalPrev = picked.previous;
+      _rates = picked.rate;
     });
     _recalculate();
   }
@@ -639,23 +671,20 @@ class _TasaScreenState extends State<TasaScreen> {
   // Calculator logic
   // ══════════════════════════════════════════════════════════════════════════
 
-  void _addUsd() {
+  void _addUsd({bool subtract = false}) {
     final x = _parse(_calcUsdCtrl.text, isVes: false);
     if (x == null || x <= 0) return;
     setState(() {
-      _items.add(
-        _CalcItem(isUsd: true, usd: x, bs: x * (_rates?.usdToVes ?? 0)),
-      );
+      _items.add(_CalcItem(isUsd: true, amount: subtract ? -x : x));
       _calcUsdCtrl.clear();
     });
   }
 
-  void _addBs() {
+  void _addBs({bool subtract = false}) {
     final y = _parse(_calcBsCtrl.text, isVes: true);
     if (y == null || y <= 0) return;
-    final rate = _rates?.usdToVes ?? 0;
     setState(() {
-      _items.add(_CalcItem(isUsd: false, usd: rate > 0 ? y / rate : 0, bs: y));
+      _items.add(_CalcItem(isUsd: false, amount: subtract ? -y : y));
       _calcBsCtrl.clear();
     });
   }
@@ -663,8 +692,17 @@ class _TasaScreenState extends State<TasaScreen> {
   void _removeItem(int i) => setState(() => _items.removeAt(i));
   void _clearAll() => setState(() => _items.clear());
 
-  double get _totalUsd => _items.fold(0, (s, it) => s + it.usd);
-  double get _totalBs => _items.fold(0, (s, it) => s + it.bs);
+  double _itemUsd(_CalcItem it) {
+    if (it.isUsd) return it.amount;
+    final rate = _rates?.usdToVes ?? 0;
+    return rate > 0 ? it.amount / rate : 0;
+  }
+
+  double _itemBs(_CalcItem it) =>
+      it.isUsd ? it.amount * (_rates?.usdToVes ?? 0) : it.amount;
+
+  double get _totalUsd => _items.fold(0, (s, it) => s + _itemUsd(it));
+  double get _totalBs => _items.fold(0, (s, it) => s + _itemBs(it));
 
   // ══════════════════════════════════════════════════════════════════════════
   // Share
@@ -731,8 +769,29 @@ class _TasaScreenState extends State<TasaScreen> {
     return _rateInVes(_fromCurrency);
   }
 
+  // Brecha entre el USDT promedio (compra+venta)/2 y el dólar BCV.
+  double? _usdtGap() {
+    if (_rates == null) return null;
+    final usdtAvg = _usdtBuyRate != null && _usdtSellRate != null
+        ? (_usdtBuyRate! + _usdtSellRate!) / 2
+        : _rates!.usdtToVes;
+    final bcv = _rates!.usdToVes;
+    if (bcv <= 0 || usdtAvg <= 0) return null;
+    return (usdtAvg / bcv - 1) * 100;
+  }
+
   double? _rateChange() {
-    if (_fromCurrency == 'USDT') return null;
+    if (_fromCurrency == 'USDT') return _usdtGap();
+    if (_historicalRate != null) {
+      final prev = _historicalPrev;
+      if (prev == null) return null;
+      final before = _fromCurrency == 'EUR' ? prev.eurToVes : prev.usdToVes;
+      final now = _fromCurrency == 'EUR'
+          ? _historicalRate!.eurToVes
+          : _historicalRate!.usdToVes;
+      if (before == 0) return null;
+      return (now - before) / before * 100;
+    }
     if (_rateOptions.length < 2) return null;
     final first = _fromCurrency == 'EUR'
         ? _rateOptions.first.eurToVes
@@ -747,7 +806,8 @@ class _TasaScreenState extends State<TasaScreen> {
   String? get _trendText {
     final change = _rateChange();
     if (change == null) return null;
-    return '${change >= 0 ? '+' : ''}${change.toStringAsFixed(2)}%';
+    final prefix = _fromCurrency == 'USDT' ? 'Brecha ' : '';
+    return '$prefix${change >= 0 ? '+' : ''}${change.toStringAsFixed(2)}%';
   }
 
   bool get _trendUp => (_rateChange() ?? 0) >= 0;
@@ -776,10 +836,7 @@ class _TasaScreenState extends State<TasaScreen> {
 
   String _dateLabel(int idx) {
     if (_rateOptions.isEmpty) return '';
-    if (_rateOptions.length == 2) {
-      return '${idx == 0 ? 'Ayer' : 'Hoy'} ${_shortDate(_rateOptions[idx].lastUpdate)}';
-    }
-    return _shortDate(_rateOptions[idx].lastUpdate);
+    return 'Tasa del ${_shortDate(_rateOptions[idx].lastUpdate)}';
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1125,6 +1182,10 @@ class _TasaScreenState extends State<TasaScreen> {
         : _fmtVes(_currentRate);
     final trend = _trendText;
     final isUp = _trendUp;
+    // En USDT se muestra la hora real de la cotización de Binance.
+    final updatedAt = _fromCurrency == 'USDT' && _usdtLastUpdatedAt != null
+        ? _usdtLastUpdatedAt
+        : _rates?.lastUpdate;
     final downColor = c.isDark
         ? const Color(0xFFFC6868)
         : const Color(0xFFDC2626);
@@ -1206,8 +1267,10 @@ class _TasaScreenState extends State<TasaScreen> {
                 const SizedBox(width: 8),
               ],
               Text(
-                _rates != null
-                    ? 'actualizado ${_fmtTime(_rates!.lastUpdate)} · ${_shortDate(_rates!.lastUpdate)}'
+                _historicalRate != null && _fromCurrency != 'USDT'
+                    ? 'histórico · ${_shortDate(_historicalRate!.lastUpdate)}/${_historicalRate!.lastUpdate.year}'
+                    : updatedAt != null
+                    ? 'actualizado ${_fmtTime(updatedAt)} · ${_shortDate(updatedAt)}'
                     : _isLoading
                     ? 'actualizando…'
                     : 'sin conexión',
@@ -1241,35 +1304,82 @@ class _TasaScreenState extends State<TasaScreen> {
         ),
         padding: const EdgeInsets.all(4),
         child: Row(
-          children: List.generate(_rateOptions.length, (i) {
-            final isActive = _selectedRateIndex == i;
-            final shadow = isActive && c.dateActiveShadow != null
-                ? [c.dateActiveShadow!]
-                : null;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => _selectRate(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isActive ? c.dateActive : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: shadow,
-                  ),
-                  child: Text(
-                    _dateLabel(i),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
-                      color: isActive ? c.dateActiveText : c.dim,
+          children: [
+            ...List.generate(_rateOptions.length, (i) {
+              final isActive =
+                  _historicalRate == null && _selectedRateIndex == i;
+              final shadow = isActive && c.dateActiveShadow != null
+                  ? [c.dateActiveShadow!]
+                  : null;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => _selectRate(i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isActive ? c.dateActive : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: shadow,
+                    ),
+                    child: Text(
+                      _dateLabel(i),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isActive
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        color: isActive ? c.dateActiveText : c.dim,
+                      ),
                     ),
                   ),
                 ),
+              );
+            }),
+            _buildHistorialChip(c),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistorialChip(_TC c) {
+    final hist = _historicalRate;
+    final isActive = hist != null;
+    final color = isActive ? c.dateActiveText : c.dim;
+    return GestureDetector(
+      onTap: () => _openHistorial(c),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? c.dateActive : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: isActive && c.dateActiveShadow != null
+              ? [c.dateActiveShadow!]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_month,
+              size: 16,
+              color: isActive ? c.accentText : color,
+            ),
+            if (isActive) ...[
+              const SizedBox(width: 6),
+              Text(
+                _shortDate(hist.lastUpdate),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
               ),
-            );
-          }),
+            ],
+          ],
         ),
       ),
     );
@@ -1768,10 +1878,11 @@ class _TasaScreenState extends State<TasaScreen> {
               prefix: r'$',
               hint: 'Monto en USD',
               onSubmit: _addUsd,
-              buttonLabel: 'USD',
+              onSubtract: () => _addUsd(subtract: true),
               buttonBg: _accent,
               buttonFg: Colors.white,
-              buttonElevation: 0,
+              subtractBg: _accent.withValues(alpha: isDark ? 0.18 : 0.12),
+              subtractFg: c.accentText,
               inputBg: c.input,
               inputBorder: c.border,
               inputTextColor: c.inputText,
@@ -1789,12 +1900,11 @@ class _TasaScreenState extends State<TasaScreen> {
               ),
               hint: 'Monto en Bs',
               onSubmit: _addBs,
-              buttonLabel: 'Bs',
+              onSubtract: () => _addBs(subtract: true),
               buttonBg: _accent,
               buttonFg: Colors.white,
-              // buttonBg: _accent.withValues(alpha: isDark ? 0.18 : 0.12),
-              // buttonFg: c.accentText,
-              buttonElevation: 0,
+              subtractBg: _accent.withValues(alpha: isDark ? 0.18 : 0.12),
+              subtractFg: c.accentText,
               inputBg: c.input,
               inputBorder: c.border,
               inputTextColor: c.inputText,
@@ -1822,7 +1932,7 @@ class _TasaScreenState extends State<TasaScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Suma compras y ve el total acumulado.',
+                      'Suma o resta montos y ve el total acumulado.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
@@ -1837,18 +1947,27 @@ class _TasaScreenState extends State<TasaScreen> {
                 children: _items.asMap().entries.map((entry) {
                   final i = entry.key;
                   final it = entry.value;
-                  final badgeBg = it.isUsd
+                  final isNeg = it.amount < 0;
+                  final negColor = isDark
+                      ? const Color(0xFFFC6868)
+                      : const Color(0xFFDC2626);
+                  final badgeBg = isNeg
+                      ? negColor.withValues(alpha: isDark ? 0.16 : 0.10)
+                      : it.isUsd
                       ? _accent.withValues(alpha: isDark ? 0.22 : 0.14)
                       : (isDark
                             ? const Color(0xFF1C2530)
                             : const Color(0xFFEEF1F4));
-                  final badgeText = it.isUsd ? c.accentText : c.dim;
-                  final main = it.isUsd
-                      ? '\$ ${_fmtVes(it.usd)}'
-                      : '${_fmtVes(it.bs)} Bs';
-                  final sub = it.isUsd
-                      ? '${_fmtVes(it.bs)} Bs'
-                      : '\$ ${_fmtVes(it.usd)}';
+                  final badgeText = isNeg
+                      ? negColor
+                      : it.isUsd
+                      ? c.accentText
+                      : c.dim;
+                  final sign = isNeg ? '− ' : '';
+                  final usd = _fmtVes(_itemUsd(it).abs());
+                  final bs = _fmtVes(_itemBs(it).abs());
+                  final main = it.isUsd ? '$sign\$ $usd' : '$sign$bs Bs';
+                  final sub = it.isUsd ? '$sign$bs Bs' : '$sign\$ $usd';
 
                   return Container(
                     margin: EdgeInsets.only(
@@ -1892,7 +2011,7 @@ class _TasaScreenState extends State<TasaScreen> {
                                 style: GoogleFonts.spaceGrotesk(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w800,
-                                  color: c.text,
+                                  color: isNeg ? negColor : c.text,
                                 ),
                               ),
                               const SizedBox(height: 1),
@@ -2160,10 +2279,11 @@ class _CalcInputRow extends StatelessWidget {
   final TextStyle? prefixStyle;
   final String hint;
   final VoidCallback onSubmit;
-  final String buttonLabel;
+  final VoidCallback onSubtract;
   final Color buttonBg;
   final Color buttonFg;
-  final double buttonElevation;
+  final Color subtractBg;
+  final Color subtractFg;
   final Color inputBg;
   final Color inputBorder;
   final Color inputTextColor;
@@ -2175,10 +2295,11 @@ class _CalcInputRow extends StatelessWidget {
     this.prefixStyle,
     required this.hint,
     required this.onSubmit,
-    required this.buttonLabel,
+    required this.onSubtract,
     required this.buttonBg,
     required this.buttonFg,
-    required this.buttonElevation,
+    required this.subtractBg,
+    required this.subtractFg,
     required this.inputBg,
     required this.inputBorder,
     required this.inputTextColor,
@@ -2240,28 +2361,35 @@ class _CalcInputRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        SizedBox(
-          height: 48,
-          child: ElevatedButton.icon(
-            onPressed: onSubmit,
-            icon: Icon(Icons.add, size: 15, color: buttonFg),
-            label: Text(buttonLabel, style: TextStyle(color: buttonFg)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: buttonBg,
-              shadowColor: Colors.transparent,
-              elevation: buttonElevation,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
-              ),
-              textStyle: GoogleFonts.plusJakartaSans(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 15),
-            ),
+        _iconButton(Icons.add, 'Sumar', onSubmit, buttonBg, buttonFg),
+        const SizedBox(width: 6),
+        _iconButton(Icons.remove, 'Restar', onSubtract, subtractBg, subtractFg),
+      ],
+    );
+  }
+
+  Widget _iconButton(
+    IconData icon,
+    String tooltip,
+    VoidCallback onTap,
+    Color bg,
+    Color fg,
+  ) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(13),
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: Icon(icon, size: 20, color: fg),
           ),
         ),
-      ],
+      ),
     );
   }
 }

@@ -52,6 +52,10 @@ class RatesService {
       'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
   static const _binanceJsonEndpoint =
       'https://abrahanq.github.io/bcv-price/binance_price.json';
+  static const _historyEndpoint =
+      'https://abrahanq.github.io/bcv-price/historico.json';
+  static const _historyCacheKey = 'rates_history_cache';
+  static const _historyCachedAtKey = 'rates_history_cached_at';
 
   static double? _n(dynamic v) {
     if (v == null) return null;
@@ -135,6 +139,63 @@ class RatesService {
               ))
           .toList()
           ..sort((a, b) => a.lastUpdate.compareTo(b.lastUpdate)));
+  }
+
+  /// Histórico completo de tasas BCV (una entrada por día publicado), ordenado
+  /// por fecha. Se cachea unas horas; si la red falla se usa la copia guardada.
+  Future<List<ExchangeRates>> fetchHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString(_historyCacheKey);
+    final cachedAt = DateTime.tryParse(
+        prefs.getString(_historyCachedAtKey) ?? '');
+
+    if (cached != null &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) < const Duration(hours: 3)) {
+      try {
+        return _parseHistory(cached);
+      } catch (_) {}
+    }
+
+    try {
+      final uri = Uri.parse(_historyEndpoint).replace(queryParameters: {
+        'v': DateTime.now().millisecondsSinceEpoch.toString(),
+      });
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+      final body = utf8.decode(response.bodyBytes);
+      final history = _parseHistory(body);
+      await prefs.setString(_historyCacheKey, body);
+      await prefs.setString(
+          _historyCachedAtKey, DateTime.now().toIso8601String());
+      return history;
+    } catch (_) {
+      if (cached != null) return _parseHistory(cached);
+      rethrow;
+    }
+  }
+
+  List<ExchangeRates> _parseHistory(String body) {
+    final data = jsonDecode(body) as Map<String, dynamic>;
+    final precios = data['precios'];
+    if (precios is! List) throw const FormatException('Invalid history');
+    final out = <ExchangeRates>[];
+    for (final item in precios) {
+      if (item is! Map) continue;
+      final usd = _n(item['usd']);
+      final eur = _n(item['eur']);
+      final date = DateTime.tryParse('${item['fecha'] ?? item['date']}');
+      if (usd == null || eur == null || date == null) continue;
+      // El histórico no trae USDT; se usa el USD como valor neutro.
+      out.add(ExchangeRates(
+          usdToVes: usd, eurToVes: eur, usdtToVes: usd, lastUpdate: date));
+    }
+    if (out.isEmpty) throw const FormatException('Empty history');
+    return out..sort((a, b) => a.lastUpdate.compareTo(b.lastUpdate));
   }
 
   Future<UsdtBinanceQuote> fetchUsdtQuoteWithCache(double fallback) async {
